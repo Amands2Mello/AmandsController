@@ -123,10 +123,6 @@ namespace AmandsController
         private float StickinessSmooth;
         private Vector2 AutoAimSmooth;
 
-        private float MagnetismRadius = 0.05f;
-        private float StickinessRadius = 0.125f;
-        private float AutoAimRadius = 0.2f;
-
         private float AimAssistAngle = 100000f;
         private float AimAssistBoneAngle;
         private LocalPlayer AimAssistLocalPlayer = null;
@@ -183,6 +179,10 @@ namespace AmandsController
 
         Vector2 directiontest;
 
+        public Vector2 AimAssistDebugPoint1 = Vector2.zero;
+        public Vector2 AimAssistDebugPoint2 = Vector2.zero;
+        public Vector2 AimAssistDebugPoint3 = Vector2.zero;
+
         public void OnGUI()
         {
             GUILayout.BeginArea(new Rect(AmandsControllerPlugin.DebugX.Value, AmandsControllerPlugin.DebugY.Value, 1280, 720));
@@ -204,11 +204,21 @@ namespace AmandsController
                 GUILayout.Label("AimAssist " + AimAssistStrengthSmooth.ToString());
             }*/
 
+            //GUILayout.Label("AimAssistAngle " + AimAssistAngle.ToString());
+            //GUILayout.Label("AimAssistBoneAngle " + AimAssistBoneAngle.ToString());
             GUILayout.Label("Magnetism " + Magnetism.ToString());
             GUILayout.Label("Stickness " + Stickiness.ToString());
-            GUILayout.Label("AutoAim " + AutoAim.ToString());
+            GUILayout.Label("AutoAim.x " + AutoAim.x.ToString());
+            GUILayout.Label("AutoAim.y " + AutoAim.y.ToString());
 
             GUILayout.EndArea();
+
+            GUIContent gUIContent = new GUIContent();
+
+            /*GUI.Box(new Rect(new Vector2(AimAssistDebugPoint1.x, (Screen.height) - AimAssistDebugPoint1.y), new Vector2(0,0)), gUIContent);
+            GUI.Box(new Rect(new Vector2(AimAssistDebugPoint2.x, (Screen.height) - AimAssistDebugPoint2.y), new Vector2(0, 0)), gUIContent);
+            GUI.Box(new Rect(new Vector2(AimAssistDebugPoint3.x, (Screen.height) - AimAssistDebugPoint3.y), new Vector2(0, 0)), gUIContent);*/
+
             // Controller UI
 
             // Debug Removal Start 1 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -524,9 +534,6 @@ namespace AmandsController
         {
             TranslateInput = typeof(InputTree).GetMethod("TranslateInput", BindingFlags.Instance | BindingFlags.NonPublic);
 
-            controller = new Controller(UserIndex.One);
-            connected = controller.IsConnected;
-
             AimAnimationCurve.keys = AimKeys;
     }
         public void Update()
@@ -659,27 +666,27 @@ namespace AmandsController
                 for (int i = 0; i < colliderCount; i++)
                 {
                     HitAimAssistLocalPlayer = colliders[i].transform.gameObject.GetComponent<LocalPlayer>();
-                    if (HitAimAssistLocalPlayer != null)
+                    if (HitAimAssistLocalPlayer != null && HitAimAssistLocalPlayer != localPlayer)
                     {
-                        AimAssistScreenLocalPosition = (((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Head.position) - (ScreenSize / 2f)) / ScreenSize) * ScreenSizeRatioMultiplier;
-                        AimAssistBoneAngle = Mathf.Sqrt(Vector2.SqrMagnitude(AimAssistScreenLocalPosition) / (ScreenSize.y / ScreenSize.x));
-                        if (AimAssistBoneAngle < Mathf.Max(MagnetismRadius, StickinessRadius, AutoAimRadius) && AimAssistBoneAngle < AimAssistAngle && !Physics.Raycast(position, (HitAimAssistLocalPlayer.PlayerBones.Head.position - position).normalized, out hit, Vector3.Distance(HitAimAssistLocalPlayer.PlayerBones.Head.position, position), HighLayerMask, QueryTriggerInteraction.Ignore))
+                        AimAssistScreenLocalPosition = (((((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Head.position) - ((((Vector2)Camera.main.WorldToScreenPoint(position + (direction * Vector3.Distance(position, HitAimAssistLocalPlayer.PlayerBones.Head.position))) - ((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Head.position) - (ScreenSize / 2f))) - (ScreenSize / 2f)) * 2f)) - (ScreenSize / 2f)) / ScreenSize) * ScreenSizeRatioMultiplier);
+                        AimAssistBoneAngle = Mathf.Sqrt(Vector2.SqrMagnitude(AimAssistScreenLocalPosition)) / (ScreenSize.y / ScreenSize.x);
+                        if (AimAssistBoneAngle < Mathf.Max(AmandsControllerPlugin.MagnetismRadius.Value, AmandsControllerPlugin.StickinessRadius.Value, AmandsControllerPlugin.AutoAimRadius.Value) && AimAssistBoneAngle < AimAssistAngle && !Physics.Raycast(position, (HitAimAssistLocalPlayer.PlayerBones.Head.position - position).normalized, out hit, Vector3.Distance(HitAimAssistLocalPlayer.PlayerBones.Head.position, position), HighLayerMask, QueryTriggerInteraction.Ignore))
                         {
                             AimAssistAngle = AimAssistBoneAngle;
                             AimAssistLocalPlayer = HitAimAssistLocalPlayer;
                             AimAssistTarget2DPoint = AimAssistScreenLocalPosition;
                         }
-                        AimAssistScreenLocalPosition = (((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Ribcage.position) - (ScreenSize / 2f)) / ScreenSize) * ScreenSizeRatioMultiplier;
-                        AimAssistBoneAngle = Mathf.Sqrt(Vector2.SqrMagnitude(AimAssistScreenLocalPosition) / (ScreenSize.y / ScreenSize.x));
-                        if (AimAssistBoneAngle < Mathf.Max(MagnetismRadius, StickinessRadius, AutoAimRadius) && AimAssistBoneAngle < AimAssistAngle && !Physics.Raycast(position, (HitAimAssistLocalPlayer.PlayerBones.Ribcage.position - position).normalized, out hit, Vector3.Distance(HitAimAssistLocalPlayer.PlayerBones.Ribcage.position, position), HighLayerMask, QueryTriggerInteraction.Ignore))
+                        AimAssistScreenLocalPosition = (((((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Ribcage.position) - ((((Vector2)Camera.main.WorldToScreenPoint(position + (direction * Vector3.Distance(position, HitAimAssistLocalPlayer.PlayerBones.Ribcage.position))) - ((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Ribcage.position) - (ScreenSize / 2f))) - (ScreenSize / 2f)) * 2f)) - (ScreenSize / 2f)) / ScreenSize) * ScreenSizeRatioMultiplier);
+                        AimAssistBoneAngle = Mathf.Sqrt(Vector2.SqrMagnitude(AimAssistScreenLocalPosition)) / (ScreenSize.y / ScreenSize.x);
+                        if (AimAssistBoneAngle < Mathf.Max(AmandsControllerPlugin.MagnetismRadius.Value, AmandsControllerPlugin.StickinessRadius.Value, AmandsControllerPlugin.AutoAimRadius.Value) && AimAssistBoneAngle < AimAssistAngle && !Physics.Raycast(position, (HitAimAssistLocalPlayer.PlayerBones.Ribcage.position - position).normalized, out hit, Vector3.Distance(HitAimAssistLocalPlayer.PlayerBones.Ribcage.position, position), HighLayerMask, QueryTriggerInteraction.Ignore))
                         {
                             AimAssistAngle = AimAssistBoneAngle;
                             AimAssistLocalPlayer = HitAimAssistLocalPlayer;
                             AimAssistTarget2DPoint = AimAssistScreenLocalPosition;
                         }
-                        AimAssistScreenLocalPosition = (((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Pelvis.position) - (ScreenSize / 2f)) / ScreenSize) * ScreenSizeRatioMultiplier;
-                        AimAssistBoneAngle = Mathf.Sqrt(Vector2.SqrMagnitude(AimAssistScreenLocalPosition) / (ScreenSize.y / ScreenSize.x));
-                        if (AimAssistBoneAngle < Mathf.Max(MagnetismRadius, StickinessRadius, AutoAimRadius) && AimAssistBoneAngle < AimAssistAngle && !Physics.Raycast(position, (HitAimAssistLocalPlayer.PlayerBones.Pelvis.position - position).normalized, out hit, Vector3.Distance(HitAimAssistLocalPlayer.PlayerBones.Pelvis.position, position), HighLayerMask, QueryTriggerInteraction.Ignore))
+                        AimAssistScreenLocalPosition = (((((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Pelvis.position) - ((((Vector2)Camera.main.WorldToScreenPoint(position + (direction * Vector3.Distance(position, HitAimAssistLocalPlayer.PlayerBones.Pelvis.position))) - ((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Pelvis.position) - (ScreenSize / 2f))) - (ScreenSize / 2f)) * 2f)) - (ScreenSize / 2f)) / ScreenSize) * ScreenSizeRatioMultiplier);
+                        AimAssistBoneAngle = Mathf.Sqrt(Vector2.SqrMagnitude(AimAssistScreenLocalPosition)) / (ScreenSize.y / ScreenSize.x);
+                        if (AimAssistBoneAngle < Mathf.Max(AmandsControllerPlugin.MagnetismRadius.Value, AmandsControllerPlugin.StickinessRadius.Value, AmandsControllerPlugin.AutoAimRadius.Value) && AimAssistBoneAngle < AimAssistAngle && !Physics.Raycast(position, (HitAimAssistLocalPlayer.PlayerBones.Pelvis.position - position).normalized, out hit, Vector3.Distance(HitAimAssistLocalPlayer.PlayerBones.Pelvis.position, position), HighLayerMask, QueryTriggerInteraction.Ignore))
                         {
                             AimAssistAngle = AimAssistBoneAngle;
                             AimAssistLocalPlayer = HitAimAssistLocalPlayer;
@@ -689,17 +696,17 @@ namespace AmandsController
                 }
                 if (AimAssistLocalPlayer != null)
                 {
-                    if (AimAssistAngle < MagnetismRadius)
+                    if (AimAssistAngle < AmandsControllerPlugin.MagnetismRadius.Value)
                     {
                         Magnetism = true;
                     }
-                    if (AimAssistAngle < StickinessRadius)
+                    if (AimAssistAngle < AmandsControllerPlugin.StickinessRadius.Value)
                     {
-                        Stickiness = Mathf.Lerp(1f, 0f, (Mathf.Clamp(AimAssistAngle / StickinessRadius, 0.5f, 1f) - 0.5f) / (1f - 0.5f));
+                        Stickiness = Mathf.Lerp(1f, 0f, (Mathf.Clamp(AimAssistAngle / AmandsControllerPlugin.StickinessRadius.Value, 0.5f, 1f) - 0.5f) / (1f - 0.5f));
                     }
-                    if (AimAssistAngle < AutoAimRadius)
+                    if (AimAssistAngle < AmandsControllerPlugin.AutoAimRadius.Value)
                     {
-                        AutoAim = Vector2.Lerp(Vector2.zero, Vector2.Lerp(new Vector2(Mathf.Clamp(AimAssistTarget2DPoint.x * 5f, -1f, 1f), Mathf.Clamp(AimAssistTarget2DPoint.y * -5f, -1f, 1f)) * 1000f * Time.deltaTime, Vector2.zero, (Mathf.Clamp(AimAssistAngle / AutoAimRadius, 0.5f, 1f) - 0.5f) / (1f - 0.5f)) * AmandsControllerPlugin.AutoAim.Value, leftThumbXYSqrt);
+                        AutoAim = Vector2.Lerp(Vector2.zero, Vector2.Lerp(new Vector2(Mathf.Clamp(AimAssistTarget2DPoint.x * 10f, -0.5f, 0.5f), Mathf.Clamp(AimAssistTarget2DPoint.y * -5f, -0.5f, 0.5f)) * 1000f * Time.deltaTime, Vector2.zero, (Mathf.Clamp(AimAssistAngle / AmandsControllerPlugin.AutoAimRadius.Value, 0.5f, 1f) - 0.5f) / (1f - 0.5f)) * AmandsControllerPlugin.AutoAim.Value, 1f);
                     }
                 }
             }
@@ -1019,6 +1026,30 @@ namespace AmandsController
         }
         public void UpdateController(LocalPlayer Player)
         {
+            switch (AmandsControllerPlugin.UserIndex.Value)
+            {
+                case 1:
+                    controller = new Controller(UserIndex.One);
+                    connected = controller.IsConnected;
+                    break;
+                case 2:
+                    controller = new Controller(UserIndex.Two);
+                    connected = controller.IsConnected;
+                    break;
+                case 3:
+                    controller = new Controller(UserIndex.Three);
+                    connected = controller.IsConnected;
+                    break;
+                case 4:
+                    controller = new Controller(UserIndex.Four);
+                    connected = controller.IsConnected;
+                    break;
+                default:
+                    controller = new Controller(UserIndex.One);
+                    connected = controller.IsConnected;
+                    break;
+            }
+
             localPlayer = Player;
             //movementContext = localPlayer.MovementContext;
 
