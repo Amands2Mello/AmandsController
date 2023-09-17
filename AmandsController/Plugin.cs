@@ -22,6 +22,7 @@ namespace AmandsController
     {
         public static GameObject Hook;
         public static AmandsControllerClass AmandsControllerClassComponent;
+        public static ConfigEntry<int> UserIndex { get; set; }
         public static ConfigEntry<int> DebugX { get; set; }
         public static ConfigEntry<int> DebugY { get; set; }
         public static ConfigEntry<bool> Magnetism { get; set; }
@@ -51,16 +52,17 @@ namespace AmandsController
 
         private void Start()
         {
+            UserIndex = Config.Bind("Controller", "User Index", 1, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 270 }));
             DebugX = Config.Bind("Controller", "Debug X", 1920 / 2, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 260 }));
             DebugY = Config.Bind("Controller", "Debug Y", 1080 / 2, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 250 }));
             Magnetism = Config.Bind("Controller", "Magnetism", true, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 240 }));
             Stickiness = Config.Bind("Controller", "Stickiness", 0.3f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 230 }));
-            AutoAim = Config.Bind("Controller", "AutoAim", 1f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 220 }));
-            StickinessSmooth = Config.Bind("Controller", "StickinessSmooth", 1.0f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 230 }));
-            AutoAimSmooth = Config.Bind("Controller", "AutoAimSmooth", 1f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 220 }));
-            MagnetismRadius = Config.Bind("Controller", "MagnetismRadius", 0.05f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 210 }));
-            StickinessRadius = Config.Bind("Controller", "StickinessRadius", 0.125f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 200 }));
-            AutoAimRadius = Config.Bind("Controller", "AutoAimRadius", 0.3f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 190 }));
+            AutoAim = Config.Bind("Controller", "AutoAim", 0.25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 220 }));
+            StickinessSmooth = Config.Bind("Controller", "StickinessSmooth", 10f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 230 }));
+            AutoAimSmooth = Config.Bind("Controller", "AutoAimSmooth", 25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 220 }));
+            MagnetismRadius = Config.Bind("Controller", "MagnetismRadius", 0.1f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 210 }));
+            StickinessRadius = Config.Bind("Controller", "StickinessRadius", 0.2f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 200 }));
+            AutoAimRadius = Config.Bind("Controller", "AutoAimRadius", 0.5f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 190 }));
             Radius = Config.Bind("Controller", "Radius", 5f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 180, IsAdvanced = true }));
             Sensitivity = Config.Bind("Controller", "Sensitivity", new Vector2(20f,-12f), new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 170 }));
             LeanSensitivity = Config.Bind("Controller", "LeanSensitivity", 50f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 160, IsAdvanced = true }));
