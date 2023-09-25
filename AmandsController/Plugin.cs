@@ -14,10 +14,11 @@ using UnityEngine.UI;
 using System.Threading.Tasks;
 using Sirenix.Utilities;
 using EFT.InputSystem;
+using UnityEngine.EventSystems;
 
 namespace AmandsController
 {
-    [BepInPlugin("com.Amanda.Controller", "Controller", "0.0.1")]
+    [BepInPlugin("com.Amanda.Controller", "Controller", "0.2.0")]
     public class AmandsControllerPlugin : BaseUnityPlugin
     {
         public static GameObject Hook;
@@ -33,8 +34,10 @@ namespace AmandsController
         public static ConfigEntry<float> MagnetismRadius { get; set; }
         public static ConfigEntry<float> StickinessRadius { get; set; }
         public static ConfigEntry<float> AutoAimRadius { get; set; }
+        public static ConfigEntry<float> AutoAimEnemyVelocity { get; set; }
         public static ConfigEntry<float> Radius { get; set; }
         public static ConfigEntry<Vector2> Sensitivity { get; set; }
+        public static ConfigEntry<float> ScrollSensitivity { get; set; }
         public static ConfigEntry<float> LeanSensitivity { get; set; }
         public static ConfigEntry<float> LDeadzone { get; set; }
         public static ConfigEntry<float> RDeadzone { get; set; }
@@ -46,6 +49,7 @@ namespace AmandsController
         {
             Debug.LogError("Controller Awake()");
             Hook = new GameObject();
+            Hook.name = "AmandsController";
             AmandsControllerClassComponent = Hook.AddComponent<AmandsControllerClass>();
             DontDestroyOnLoad(Hook);
         }
@@ -59,12 +63,14 @@ namespace AmandsController
             Stickiness = Config.Bind("Controller", "Stickiness", 0.3f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 230 }));
             AutoAim = Config.Bind("Controller", "AutoAim", 0.25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 220 }));
             StickinessSmooth = Config.Bind("Controller", "StickinessSmooth", 10f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 230 }));
-            AutoAimSmooth = Config.Bind("Controller", "AutoAimSmooth", 25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 220 }));
+            AutoAimSmooth = Config.Bind("Controller", "AutoAimSmooth", 10f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 220 }));
             MagnetismRadius = Config.Bind("Controller", "MagnetismRadius", 0.1f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 210 }));
             StickinessRadius = Config.Bind("Controller", "StickinessRadius", 0.2f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 200 }));
             AutoAimRadius = Config.Bind("Controller", "AutoAimRadius", 0.5f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 190 }));
+            AutoAimEnemyVelocity = Config.Bind("Controller", "AutoAimEnemyVelocity", 0.2f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 188 }));
             Radius = Config.Bind("Controller", "Radius", 5f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 180, IsAdvanced = true }));
             Sensitivity = Config.Bind("Controller", "Sensitivity", new Vector2(20f,-12f), new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 170 }));
+            ScrollSensitivity = Config.Bind("Controller", "ScrollSensitivity", 1f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 168 }));
             LeanSensitivity = Config.Bind("Controller", "LeanSensitivity", 50f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 160, IsAdvanced = true }));
             LDeadzone = Config.Bind("Controller", "LDeadzone", 0.25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 150 }));
             RDeadzone = Config.Bind("Controller", "RDeadzone", 0.08f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 140 }));
@@ -76,6 +82,8 @@ namespace AmandsController
 
             new AmandsLocalPlayerPatch().Enable();
             new AmandsTarkovApplicationPatch().Enable();
+            new AmandsInventoryScreenShowPatch().Enable();
+            new AmandsInventoryScreenClosePatch().Enable();
             new AmandsActionPanelPatch().Enable();
             new AmandsHealingLimbSelectorShowPatch().Enable();
             new AmandsHealingLimbSelectorClosePatch().Enable();
@@ -96,6 +104,15 @@ namespace AmandsController
             new ContainersPanelClosePatch().Enable();
             new SearchButtonShowPatch().Enable();
             new SearchButtonClosePatch().Enable();
+            new ScrollRectNoDragOnEnable().Enable();
+            new ScrollRectNoDragOnDisable().Enable();
+
+            new ItemViewOnBeginDrag().Enable();
+            new ItemViewOnEndDrag().Enable();
+            new ItemViewUpdate().Enable();
+            new DraggedItemViewMethod_3().Enable();
+            new TooltipMethod_0().Enable();
+            new SimpleStashPanelShowPatch().Enable();
         }
     }
     public class AmandsLocalPlayerPatch : ModulePatch
@@ -124,6 +141,30 @@ namespace AmandsController
         private static void PatchPostFix(ref TarkovApplication __instance, InputTree inputTree)
         {
             AmandsControllerPlugin.AmandsControllerClassComponent.inputTree = inputTree;
+        }
+    }
+    public class AmandsInventoryScreenShowPatch : ModulePatch
+    {
+        protected override MethodBase GetTargetMethod()
+        {
+            return typeof(InventoryScreen).GetMethod("Show", BindingFlags.Instance | BindingFlags.Public);
+        }
+        [PatchPostfix]
+        private static void PatchPostFix(ref InventoryScreen __instance)
+        {
+            AmandsControllerPlugin.AmandsControllerClassComponent.UpdateInterfaceBinds(true);
+        }
+    }
+    public class AmandsInventoryScreenClosePatch : ModulePatch
+    {
+        protected override MethodBase GetTargetMethod()
+        {
+            return typeof(InventoryScreen).GetMethod("Close", BindingFlags.Instance | BindingFlags.Public);
+        }
+        [PatchPostfix]
+        private static void PatchPostFix(ref InventoryScreen __instance)
+        {
+            AmandsControllerPlugin.AmandsControllerClassComponent.UpdateInterfaceBinds(false);
         }
     }
     public class AmandsActionPanelPatch : ModulePatch
@@ -521,6 +562,132 @@ namespace AmandsController
             if (!AmandsControllerPlugin.AmandsControllerClassComponent.searchButtons.Contains(__instance)) return;
             AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("Close SearchButton");
             AmandsControllerPlugin.AmandsControllerClassComponent.searchButtons.Remove(__instance);
+        }
+    }
+    public class ItemViewOnBeginDrag : ModulePatch
+    {
+        protected override MethodBase GetTargetMethod()
+        {
+            return typeof(ItemView).GetMethod("OnBeginDrag", BindingFlags.Instance | BindingFlags.Public);
+        }
+        [PatchPrefix]
+        private static void PatchPreFix(ref ItemView __instance, PointerEventData eventData)
+        {
+            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging)
+            {
+                AmandsControllerPlugin.AmandsControllerClassComponent.AmandsControllerCancelDrag();
+            }
+        }
+    }
+    public class ItemViewOnEndDrag : ModulePatch
+    {
+        protected override MethodBase GetTargetMethod()
+        {
+            return typeof(ItemView).GetMethod("OnEndDrag", BindingFlags.Instance | BindingFlags.Public);
+        }
+        [PatchPostfix]
+        private static void PatchPostFix(ref ItemView __instance, PointerEventData eventData)
+        {
+            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging)
+            {
+                AmandsControllerPlugin.AmandsControllerClassComponent.AmandsControllerCancelDrag();
+            }
+        }
+    }
+    public class ItemViewUpdate : ModulePatch
+    {
+        protected override MethodBase GetTargetMethod()
+        {
+            return typeof(ItemView).GetMethod("Update", BindingFlags.Instance | BindingFlags.NonPublic);
+        }
+        [PatchPrefix]
+        private static bool PatchPreFix(ref ItemView __instance)
+        {
+            return !AmandsControllerPlugin.AmandsControllerClassComponent.Dragging;
+        }
+    }
+    public class DraggedItemViewMethod_3 : ModulePatch
+    {
+        protected override MethodBase GetTargetMethod()
+        {
+            return typeof(DraggedItemView).GetMethod("method_3", BindingFlags.Instance | BindingFlags.NonPublic);
+        }
+        [PatchPrefix]
+        private static bool PatchPreFix(ref DraggedItemView __instance)
+        {
+            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging)
+            {
+                RectTransform RectTransform_0 = Traverse.Create(__instance).Property("RectTransform_0").GetValue<RectTransform>();
+                RectTransform_0.position = AmandsControllerPlugin.AmandsControllerClassComponent.globalPosition;
+                return false;
+            }
+            else
+            {
+                return true;
+            }
+        }
+    }
+    public class TooltipMethod_0 : ModulePatch
+    {
+        protected override MethodBase GetTargetMethod()
+        {
+            return typeof(Tooltip).GetMethod("method_0", BindingFlags.Instance | BindingFlags.NonPublic);
+        }
+        [PatchPrefix]
+        private static void PatchPreFix(ref ItemView __instance, ref Vector2 position)
+        {
+            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging)
+            {
+                position = AmandsControllerPlugin.AmandsControllerClassComponent.globalPosition;
+            }
+        }
+    }
+    public class ScrollRectNoDragOnEnable : ModulePatch
+    {
+        protected override MethodBase GetTargetMethod()
+        {
+            return typeof(ScrollRectNoDrag).GetMethod("OnEnable", BindingFlags.Instance | BindingFlags.NonPublic);
+        }
+        [PatchPostfix]
+        private static void PatchPostFix(ref ScrollRectNoDrag __instance)
+        {
+            if (!AmandsControllerPlugin.AmandsControllerClassComponent.scrollRectNoDrags.Contains(__instance))
+            {
+                AmandsControllerPlugin.AmandsControllerClassComponent.scrollRectNoDrags.Add(__instance);
+            }
+        }
+    }
+    public class ScrollRectNoDragOnDisable : ModulePatch
+    {
+        protected override MethodBase GetTargetMethod()
+        {
+            return typeof(ScrollRectNoDrag).GetMethod("OnDisable", BindingFlags.Instance | BindingFlags.NonPublic);
+        }
+        [PatchPostfix]
+        private static void PatchPostFix(ref ScrollRectNoDrag __instance)
+        {
+            AmandsControllerPlugin.AmandsControllerClassComponent.scrollRectNoDrags.Remove(__instance);
+        }
+    }
+    public class SimpleStashPanelShowPatch : ModulePatch
+    {
+        protected override MethodBase GetTargetMethod()
+        {
+            return typeof(SimpleStashPanel).GetMethod("Show", BindingFlags.Instance | BindingFlags.Public);
+        }
+        [PatchPostfix]
+        private static void PatchPostFix(ref SimpleStashPanel __instance)
+        {
+            ScrollRect scrollRect = Traverse.Create(__instance).Field("_stashScroll").GetValue<ScrollRect>();
+            if (scrollRect != null)
+            {
+                GridViewMagnifier gridViewMagnifier = scrollRect.gameObject.GetComponent<GridViewMagnifier>();
+                if (gridViewMagnifier != null)
+                {
+                    GridView gridView = Traverse.Create(gridViewMagnifier).Field("_gridView").GetValue<GridView>();
+                    AmandsControllerPlugin.AmandsControllerClassComponent.SimpleStashGridView = gridView;
+                }
+            }
         }
     }
 }
