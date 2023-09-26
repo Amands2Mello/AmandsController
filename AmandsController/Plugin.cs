@@ -18,7 +18,7 @@ using UnityEngine.EventSystems;
 
 namespace AmandsController
 {
-    [BepInPlugin("com.Amanda.Controller", "Controller", "0.2.0")]
+    [BepInPlugin("com.Amanda.Controller", "Controller", "0.2.2")]
     public class AmandsControllerPlugin : BaseUnityPlugin
     {
         public static GameObject Hook;
@@ -67,7 +67,7 @@ namespace AmandsController
             MagnetismRadius = Config.Bind("Controller", "MagnetismRadius", 0.1f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 210 }));
             StickinessRadius = Config.Bind("Controller", "StickinessRadius", 0.2f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 200 }));
             AutoAimRadius = Config.Bind("Controller", "AutoAimRadius", 0.5f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 190 }));
-            AutoAimEnemyVelocity = Config.Bind("Controller", "AutoAimEnemyVelocity", 0.2f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 188 }));
+            AutoAimEnemyVelocity = Config.Bind("Controller", "AutoAimEnemyVelocity", 0.1f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 188 }));
             Radius = Config.Bind("Controller", "Radius", 5f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 180, IsAdvanced = true }));
             Sensitivity = Config.Bind("Controller", "Sensitivity", new Vector2(20f,-12f), new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 170 }));
             ScrollSensitivity = Config.Bind("Controller", "ScrollSensitivity", 1f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 168 }));
