@@ -20,6 +20,8 @@ using Comfort.Common;
 using SharpDX;
 using EFT.Communications;
 using EFT.InventoryLogic;
+using Cutscene;
+using Diz.Binding;
 
 namespace AmandsController
 {
@@ -181,6 +183,7 @@ namespace AmandsController
         public SlotView currentContainersSlotView;
         public SearchButton currentSearchButton;
         public ScrollRectNoDrag currentScrollRectNoDrag;
+        public RectTransform currentScrollRectNoDragRectTransform;
 
         public Vector2 globalPosition = Vector2.zero;
         public Vector2 tglobalPosition = Vector2.zero;
@@ -221,6 +224,10 @@ namespace AmandsController
         private object[] IsInteractionAvailableInvokeParameters = new object[1] { EItemInfoButton.Inspect };
         public MethodInfo ExecuteMiddleClick;
 
+        public MethodInfo QuickFindAppropriatePlace;
+        public MethodInfo CanExecute;
+        public MethodInfo RunNetworkTransaction;
+
         public void OnGUI()
         {
             GUILayout.BeginArea(new Rect(AmandsControllerPlugin.DebugX.Value, AmandsControllerPlugin.DebugY.Value, 1280, 720));
@@ -244,10 +251,10 @@ namespace AmandsController
 
             //GUILayout.Label("AimAssistAngle " + AimAssistAngle.ToString());
             //GUILayout.Label("AimAssistBoneAngle " + AimAssistBoneAngle.ToString());
-            GUILayout.Label("Magnetism " + Magnetism.ToString());
+            /*GUILayout.Label("Magnetism " + Magnetism.ToString());
             GUILayout.Label("Stickness " + Stickiness.ToString());
             GUILayout.Label("AutoAim.x " + AutoAim.x.ToString());
-            GUILayout.Label("AutoAim.y " + AutoAim.y.ToString());
+            GUILayout.Label("AutoAim.y " + AutoAim.y.ToString());*/
 
             GUILayout.EndArea();
 
@@ -259,7 +266,7 @@ namespace AmandsController
             /*RectTransform rectTransform;
             foreach (ScrollRectNoDrag scrollRectNoDrag in scrollRectNoDrags)
             {
-                rectTransform = scrollRectNoDrag.RectTransform();
+                rectTransform = scrollRectNoDrag.GetComponent<RectTransform>();
                 //GUI.Box(new Rect(new Vector2(rectTransform.position.x - ((1 - rectTransform.pivot.x) * rectTransform.rect.width), (Screen.height) - (rectTransform.position.y + ((1 - rectTransform.pivot.y) * rectTransform.rect.height))), new Vector2(rectTransform.rect.width, rectTransform.rect.height)), gUIContent);
                 GUI.Box(new Rect(new Vector2(rectTransform.position.x + rectTransform.rect.x, (Screen.height) - (rectTransform.position.y - (rectTransform.rect.height * (rectTransform.pivot.y - 1f)))), new Vector2(rectTransform.rect.width, rectTransform.rect.height)), gUIContent);
             }*/
@@ -583,6 +590,9 @@ namespace AmandsController
             TranslateInput = typeof(InputTree).GetMethod("TranslateInput", BindingFlags.Instance | BindingFlags.NonPublic);
             Press = typeof(Button).GetMethod("Press", BindingFlags.Instance | BindingFlags.NonPublic);
             ExecuteMiddleClick = typeof(ItemView).GetMethod("ExecuteMiddleClick", BindingFlags.Instance | BindingFlags.NonPublic);
+            QuickFindAppropriatePlace = typeof(ItemUiContext).GetMethod("QuickFindAppropriatePlace", BindingFlags.Instance | BindingFlags.Public);
+            CanExecute = typeof(TraderControllerClass).GetMethod("CanExecute", BindingFlags.Instance | BindingFlags.Public);
+            RunNetworkTransaction = typeof(TraderControllerClass).GetMethod("RunNetworkTransaction", BindingFlags.Instance | BindingFlags.Public);
 
             AimAnimationCurve.keys = AimKeys;
         }
@@ -904,11 +914,36 @@ namespace AmandsController
             rightThumb.y = (float)gamepad.RightThumbY / maxValue;
             rightThumbXYSqrt = Mathf.Sqrt(Mathf.Pow(rightThumb.x, 2) + Mathf.Pow(rightThumb.y, 2));
 
-            if (Mathf.Abs(leftThumb.y) > 0.2f && currentScrollRectNoDrag != null)
+            if (currentScrollRectNoDrag != null && currentScrollRectNoDragRectTransform != null)
             {
                 float height = currentScrollRectNoDrag.content.rect.height;
-                //currentScrollRectNoDrag.verticalNormalizedPosition = currentScrollRectNoDrag.verticalNormalizedPosition + ((rightThumb.y * 1000f * Time.deltaTime ) / (currentScrollRectNoDrag.content.rect.height * 2f));
-                currentScrollRectNoDrag.verticalNormalizedPosition = currentScrollRectNoDrag.verticalNormalizedPosition + ((((leftThumb.y * 1000f) / height) / height) * 10000f * Time.deltaTime * AmandsControllerPlugin.ScrollSensitivity.Value);
+                float position = currentScrollRectNoDragRectTransform.position.y - (currentScrollRectNoDragRectTransform.rect.height * (currentScrollRectNoDragRectTransform.pivot.y - 1f));
+                if (Mathf.Abs(leftThumb.y) > 0.2f)
+                {
+                    currentScrollRectNoDrag.verticalNormalizedPosition = currentScrollRectNoDrag.verticalNormalizedPosition + ((((leftThumb.y * 1000f) / height) / height) * 10000f * Time.deltaTime * AmandsControllerPlugin.ScrollSensitivity.Value);
+                    UpdateGlobalPosition();
+                    if ((globalPosition.y + (GridSize / 2f)) > position)
+                    {
+                        ControllerUIMove(new Vector2Int(0, -1), false);
+                    }
+                    else if ((globalPosition.y - (GridSize / 2f)) < (position - (currentScrollRectNoDragRectTransform.rect.height * ScreenRatio)))
+                    {
+                        ControllerUIMove(new Vector2Int(0, 1), false);
+                    }
+                }
+                else
+                {
+                    if ((globalPosition.y + (GridSize / 2f)) > position)
+                    {
+                        currentScrollRectNoDrag.verticalNormalizedPosition = currentScrollRectNoDrag.verticalNormalizedPosition + (((1000f / height) / height) * 10000f * Time.deltaTime * AmandsControllerPlugin.ScrollSensitivity.Value);
+                        UpdateGlobalPosition();
+                    }
+                    else if ((globalPosition.y - (GridSize / 2f)) < (position - (currentScrollRectNoDragRectTransform.rect.height * ScreenRatio)))
+                    {
+                        currentScrollRectNoDrag.verticalNormalizedPosition = currentScrollRectNoDrag.verticalNormalizedPosition + (((-1000f / height) / height) * 10000f * Time.deltaTime * AmandsControllerPlugin.ScrollSensitivity.Value);
+                        UpdateGlobalPosition();
+                    }
+                }
             }
 
             if (Interface)
@@ -1208,6 +1243,7 @@ namespace AmandsController
             AmandsControllerSets["Interface"].Add(EAmandsControllerButton.RIGHT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.InterfaceRight, EAmandsControllerPressType.Press, 20, "") });
             AmandsControllerSets["Interface"][EAmandsControllerButton.RIGHT].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.DisplayTimer }, EAmandsControllerCommand.InterfaceDisableAutoMove, EAmandsControllerPressType.Release, 20, ""));
             AmandsControllerSets["Interface"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.BeginDrag, EAmandsControllerPressType.Press, 20, "") });
+            AmandsControllerSets["Interface"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand> { ECommand.Escape }, EAmandsControllerCommand.InputTree, EAmandsControllerPressType.Press, 20, "") });
             AmandsControllerSets["Interface"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.Use, EAmandsControllerPressType.Press, 20, "") });
             AmandsControllerSets["Interface"][EAmandsControllerButton.X].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.DisplayTimer }, EAmandsControllerCommand.UseHold, EAmandsControllerPressType.Hold, 20, ""));
             AmandsControllerSets["Interface"].Add(EAmandsControllerButton.Y, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.QuickMove, EAmandsControllerPressType.Press, 20, "") });
@@ -1703,8 +1739,10 @@ namespace AmandsController
 
                     foreach (GridView gridView in bestContainedGridsView.GridViews)
                     {
-                        GridWidth = gridView.Grid.GridWidth.Value;
-                        GridHeight = gridView.Grid.GridHeight.Value;
+                        GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
+                        GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                        //GridWidth = gridView.Grid.GridWidth.Value;
+                        //GridHeight = gridView.Grid.GridHeight.Value;
 
                         if (GridWidth == 1 && GridHeight == 1)
                         {
@@ -1818,8 +1856,10 @@ namespace AmandsController
                     if (Position.x > gridView.transform.position.x && Position.x < (gridView.transform.position.x + (rectTransform.sizeDelta.x * ScreenRatio)) && Position.y < gridView.transform.position.y && Position.y > (gridView.transform.position.y - (rectTransform.sizeDelta.y * ScreenRatio)))
                     {
                         Vector2 position;
-                        int GridWidth = gridView.Grid.GridWidth.Value;
-                        int GridHeight = gridView.Grid.GridHeight.Value;
+                        int GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
+                        int GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                        //int GridWidth = gridView.Grid.GridWidth.Value;
+                        //int GridHeight = gridView.Grid.GridHeight.Value;
 
                         hitDebug = gridView.transform.position;
                         hitSizeDebug = rectTransform.sizeDelta * ScreenRatio;
@@ -1862,8 +1902,10 @@ namespace AmandsController
                 Vector2 position = new Vector2(tradingTableGridView.transform.position.x - (size.x / 2f), tradingTableGridView.transform.position.y + (size.y / 2f));
                 if (Position.x > position.x && Position.x < (position.x + size.x) && Position.y < position.y && Position.y > (position.y - size.y))
                 {
-                    int GridWidth = tradingTableGridView.Grid.GridWidth.Value;
-                    int GridHeight = tradingTableGridView.Grid.GridHeight.Value;
+                    int GridWidth = Traverse.Create(Traverse.Create(tradingTableGridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
+                    int GridHeight = Traverse.Create(Traverse.Create(tradingTableGridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                    //int GridWidth = tradingTableGridView.Grid.GridWidth.Value;
+                    //int GridHeight = tradingTableGridView.Grid.GridHeight.Value;
 
                     hitDebug = position;
                     hitSizeDebug = rectTransform.sizeDelta * ScreenRatio;
@@ -2151,8 +2193,10 @@ namespace AmandsController
 
                     foreach (GridView gridView in bestContainedGridsView.GridViews)
                     {
-                        GridWidth = gridView.Grid.GridWidth.Value;
-                        GridHeight = gridView.Grid.GridHeight.Value;
+                        GridWidth = Traverse.Create(Traverse.Create(tradingTableGridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
+                        GridHeight = Traverse.Create(Traverse.Create(tradingTableGridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                        //GridWidth = gridView.Grid.GridWidth.Value;
+                        //GridHeight = gridView.Grid.GridHeight.Value;
 
                         if (GridWidth == 1 && GridHeight == 1)
                         {
@@ -2265,11 +2309,12 @@ namespace AmandsController
             Vector2 position;
             foreach (ScrollRectNoDrag scrollRectNoDrag in scrollRectNoDrags)
             {
-                rectTransform = scrollRectNoDrag.RectTransform();
+                rectTransform = scrollRectNoDrag.GetComponent<RectTransform>();
                 position = new Vector2(rectTransform.position.x + rectTransform.rect.x, rectTransform.position.y - (rectTransform.rect.height * (rectTransform.pivot.y - 1f)));
                 if (Position.x > position.x && Position.x < (position.x + (rectTransform.rect.width * ScreenRatio)) && Position.y < position.y && Position.y > (position.y - (rectTransform.rect.height * ScreenRatio)))
                 {
                     currentScrollRectNoDrag = scrollRectNoDrag;
+                    currentScrollRectNoDragRectTransform = rectTransform;
                     return true;
                 }
             }
@@ -2317,7 +2362,13 @@ namespace AmandsController
             if (Skip) goto Skip1;
 
             // Local GridView Search
-            if (currentGridView != null && gridViewLocation.x + direction.x >= 1 && gridViewLocation.x + direction.x <= currentGridView.Grid.GridWidth.Value && gridViewLocation.y - direction.y >= 1 && gridViewLocation.y - direction.y <= currentGridView.Grid.GridHeight.Value)
+            if (currentGridView != null)
+            {
+                GridWidth = Traverse.Create(Traverse.Create(currentGridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
+                GridHeight = Traverse.Create(Traverse.Create(currentGridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+            }
+            if (currentGridView != null && gridViewLocation.x + direction.x >= 1 && gridViewLocation.x + direction.x <= GridWidth && gridViewLocation.y - direction.y >= 1 && gridViewLocation.y - direction.y <= GridHeight)
+            //if (currentGridView != null && gridViewLocation.x + direction.x >= 1 && gridViewLocation.x + direction.x <= currentGridView.Grid.GridWidth.Value && gridViewLocation.y - direction.y >= 1 && gridViewLocation.y - direction.y <= currentGridView.Grid.GridHeight.Value)
             {
                 gridViewLocation.x += direction.x;
                 gridViewLocation.y -= direction.y;
@@ -2330,7 +2381,13 @@ namespace AmandsController
             }
 
             // Local TradingTableGridView Search
-            if (currentTradingTableGridView != null && gridViewLocation.x + direction.x >= 1 && gridViewLocation.x + direction.x <= currentTradingTableGridView.Grid.GridWidth.Value && gridViewLocation.y - direction.y >= 1 && gridViewLocation.y - direction.y <= currentTradingTableGridView.Grid.GridHeight.Value)
+            if (currentTradingTableGridView != null)
+            {
+                GridWidth = Traverse.Create(Traverse.Create(currentTradingTableGridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
+                GridHeight = Traverse.Create(Traverse.Create(currentTradingTableGridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+            }
+            if (currentTradingTableGridView != null && gridViewLocation.x + direction.x >= 1 && gridViewLocation.x + direction.x <= GridWidth && gridViewLocation.y - direction.y >= 1 && gridViewLocation.y - direction.y <= GridHeight)
+            //if (currentTradingTableGridView != null && gridViewLocation.x + direction.x >= 1 && gridViewLocation.x + direction.x <= currentTradingTableGridView.Grid.GridWidth.Value && gridViewLocation.y - direction.y >= 1 && gridViewLocation.y - direction.y <= currentTradingTableGridView.Grid.GridHeight.Value)
             {
                 gridViewLocation.x += direction.x;
                 gridViewLocation.y -= direction.y;
@@ -2353,8 +2410,10 @@ namespace AmandsController
                 {
                     if (gridView == currentGridView) continue;
 
-                    GridWidth = gridView.Grid.GridWidth.Value;
-                    GridHeight = gridView.Grid.GridHeight.Value;
+                    GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
+                    GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                    //GridWidth = gridView.Grid.GridWidth.Value;
+                    //GridHeight = gridView.Grid.GridHeight.Value;
 
                     if (GridWidth == 1 && GridHeight == 1)
                     {
@@ -2465,7 +2524,8 @@ namespace AmandsController
             Skip1:
 
             // GlobalPosition
-            if (currentGridView != null)
+            UpdateGlobalPosition();
+            /*if (currentGridView != null)
             {
                 globalPosition.x = currentGridView.transform.position.x + (GridSize * gridViewLocation.x) - (GridSize / 2f);
                 globalPosition.y = currentGridView.transform.position.y - (GridSize * gridViewLocation.y) + (GridSize / 2f);
@@ -2505,7 +2565,7 @@ namespace AmandsController
                 {
                     ActiveAmandsControllerSets.Add("SearchButton");
                 }
-            }
+            }*/
             // Global Blind Search
 
             if (Skip) goto Skip2;
@@ -2515,8 +2575,10 @@ namespace AmandsController
             {
                 if (gridView == currentGridView) continue;
 
-                GridWidth = gridView.Grid.GridWidth.Value;
-                GridHeight = gridView.Grid.GridHeight.Value;
+                GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
+                GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                //GridWidth = gridView.Grid.GridWidth.Value;
+                //GridHeight = gridView.Grid.GridHeight.Value;
 
                 if (GridWidth == 1 && GridHeight == 1)
                 {
@@ -2567,8 +2629,10 @@ namespace AmandsController
                 {
                     if (gridView == currentGridView) continue;
 
-                    GridWidth = gridView.Grid.GridWidth.Value;
-                    GridHeight = gridView.Grid.GridHeight.Value;
+                    GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
+                    GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                    //GridWidth = gridView.Grid.GridWidth.Value;
+                    //GridHeight = gridView.Grid.GridHeight.Value;
 
                     if (GridWidth == 1 && GridHeight == 1)
                     {
@@ -2618,8 +2682,10 @@ namespace AmandsController
                 Vector2 size = tradingTableGridView.GetComponent<RectTransform>().sizeDelta * ScreenRatio;
                 Vector2 positionTradingTableGridView = new Vector2(tradingTableGridView.transform.position.x - (size.x / 2f), tradingTableGridView.transform.position.y + (size.y / 2f));
 
-                GridWidth = tradingTableGridView.Grid.GridWidth.Value;
-                GridHeight = tradingTableGridView.Grid.GridHeight.Value;
+                GridWidth = Traverse.Create(Traverse.Create(tradingTableGridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
+                GridHeight = Traverse.Create(Traverse.Create(tradingTableGridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                //GridWidth = tradingTableGridView.Grid.GridWidth.Value;
+                //GridHeight = tradingTableGridView.Grid.GridHeight.Value;
 
                 position.x = Mathf.Clamp(globalPosition.x - positionTradingTableGridView.x, GridSize / 2f, (GridSize * GridWidth) - (GridSize / 2f));
                 position.y = -Mathf.Clamp(positionTradingTableGridView.y - globalPosition.y, GridSize / 2f, (GridSize * GridHeight) - (GridSize / 2f));
@@ -2905,8 +2971,10 @@ namespace AmandsController
             // Skip Include SimpleStash
             if (Skip && SimpleStashGridView != null && SimpleStashGridView != currentGridView)
             {
-                GridWidth = SimpleStashGridView.Grid.GridWidth.Value;
-                GridHeight = SimpleStashGridView.Grid.GridHeight.Value;
+                GridWidth = Traverse.Create(Traverse.Create(SimpleStashGridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
+                GridHeight = Traverse.Create(Traverse.Create(SimpleStashGridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                //GridWidth = SimpleStashGridView.Grid.GridWidth.Value;
+                //GridHeight = SimpleStashGridView.Grid.GridHeight.Value;
 
                 if (GridWidth == 1 && GridHeight == 1)
                 {
@@ -2970,7 +3038,13 @@ namespace AmandsController
             currentContainersSlotView = bestContainersSlotView;
             currentSearchButton = bestSearchButton;
             gridViewLocation = bestGridViewLocation;
-
+            UpdateGlobalPosition();
+            FindGridWindow(globalPosition);
+            // OnMove
+            ControllerUIOnMove(direction, globalPosition);
+        }
+        public void UpdateGlobalPosition()
+        {
             if (currentGridView != null)
             {
                 globalPosition.x = currentGridView.transform.position.x + (GridSize * gridViewLocation.x) - (GridSize / 2f);
@@ -2984,8 +3058,7 @@ namespace AmandsController
             }
             else if (currentModSlotView != null)
             {
-                globalPosition.x = currentModSlotView.transform.position.x;
-                globalPosition.y = currentModSlotView.transform.position.y;
+                globalPosition = currentModSlotView.transform.position;
             }
             else if (currentEquipmentSlotView != null)
             {
@@ -3013,9 +3086,6 @@ namespace AmandsController
                     ActiveAmandsControllerSets.Add("SearchButton");
                 }
             }
-            FindGridWindow(globalPosition);
-            // OnMove
-            ControllerUIOnMove(direction, globalPosition);
         }
         public void AmandsControllerUse(bool Hold)
         {
@@ -3085,10 +3155,15 @@ namespace AmandsController
                                 }
                                 return;
                             }
-                            else if (itemView.IsBeingLoadedMagazine.Value || itemView.IsBeingUnloadedMagazine.Value)
+                            else
                             {
-                                ItemController.StopProcesses();
-                                return;
+                                bool IsBeingLoadedMagazine = Traverse.Create(Traverse.Create(itemView).Property("IsBeingLoadedMagazine").GetValue<object>()).Field("gparam_0").GetValue<bool>();
+                                bool IsBeingUnloadedMagazine = Traverse.Create(Traverse.Create(itemView).Property("IsBeingUnloadedMagazine").GetValue<object>()).Field("gparam_0").GetValue<bool>();
+                                if (IsBeingLoadedMagazine || IsBeingUnloadedMagazine)
+                                {
+                                    ItemController.StopProcesses();
+                                    return;
+                                }
                             }
                             ExecuteInteractionInvokeParameters[0] = EItemInfoButton.CheckMagazine;
                             if ((bool)ExecuteInteraction.Invoke(NewContextInteractionsObject, ExecuteInteractionInvokeParameters)) return;
@@ -3123,24 +3198,38 @@ namespace AmandsController
                         if (ItemUiContext == null || !itemView.IsSearched) return;
                         TraderControllerClass ItemController = Traverse.Create(itemView).Field("ItemController").GetValue<TraderControllerClass>();
                         SimpleTooltip tooltip = ItemUiContext.Tooltip;
-                        GStruct374 gstruct = ItemUiContext.QuickFindAppropriatePlace(itemView.ItemContext, ItemController, false, true, true);
-                        if (gstruct.Failed || !ItemController.CanExecute(gstruct.Value))
+                        //GStruct374 gstruct = ItemUiContext.QuickFindAppropriatePlace(itemView.ItemContext, ItemController, false, true, true);
+                        object ItemContext = Traverse.Create(itemView).Property("ItemContext").GetValue<object>();
+                        if (ItemContext != null)
                         {
-                            return;
+                            object gstructObject = QuickFindAppropriatePlace.Invoke(ItemUiContext, new object[5] { ItemContext, ItemController, false, true, true });
+                            if (gstructObject != null)
+                            {
+                                bool Failed = Traverse.Create(gstructObject).Property("Failed").GetValue<bool>();
+                                if (Failed) return;
+                                object Value = Traverse.Create(gstructObject).Field("Value").GetValue<object>();
+                                if (Value != null)
+                                {
+                                    if (!(bool)CanExecute.Invoke(ItemController, new object[1] { Value }))
+                                    {
+                                        return;
+                                    }
+                                    bool ItemsDestroyRequired = Traverse.Create(Value).Field("ItemsDestroyRequired").GetValue<bool>();
+                                    if (ItemsDestroyRequired)
+                                    {
+                                        NotificationManagerClass.DisplayWarningNotification("DiscardLimit", ENotificationDurationType.Default);
+                                        return;
+                                    }
+                                    string itemSound = itemView.Item.ItemSound;
+                                    RunNetworkTransaction.Invoke(ItemController, new object[2] { Value, null });
+                                    if (tooltip != null)
+                                    {
+                                        tooltip.Close();
+                                    }
+                                    Singleton<GUISounds>.Instance.PlayItemSound(itemSound, EInventorySoundType.pickup, false);
+                                }
+                            }
                         }
-                        GInterface277 ginterface;
-                        if ((ginterface = (gstruct.Value as GInterface277)) != null && ginterface.ItemsDestroyRequired)
-                        {
-                            NotificationManagerClass.DisplayWarningNotification(new GClass3044(itemView.Item, ginterface.ItemsToDestroy).GetLocalizedDescription(), ENotificationDurationType.Default);
-                            return;
-                        }
-                        string itemSound = itemView.Item.ItemSound;
-                        ItemController.RunNetworkTransaction(gstruct.Value, null);
-                        if (tooltip != null)
-                        {
-                            tooltip.Close();
-                        }
-                        Singleton<GUISounds>.Instance.PlayItemSound(itemSound, EInventorySoundType.pickup, false);
                     }
                 }
             }
@@ -3300,8 +3389,10 @@ namespace AmandsController
             gridViewsDebug.Clear();
             foreach (GridView gridView in gridViews)
             {
-                GridWidth = gridView.Grid.GridWidth.Value;
-                GridHeight = gridView.Grid.GridHeight.Value;
+                GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
+                GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                //GridWidth = gridView.Grid.GridWidth.Value;
+                //GridHeight = gridView.Grid.GridHeight.Value;
 
                 if (GridWidth == 1 && GridHeight == 1)
                 {
@@ -3330,8 +3421,10 @@ namespace AmandsController
             {
                 foreach (GridView gridView in containedGridsView.GridViews)
                 {
-                    GridWidth = gridView.Grid.GridWidth.Value;
-                    GridHeight = gridView.Grid.GridHeight.Value;
+                    GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
+                    GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                    //GridWidth = gridView.Grid.GridWidth.Value;
+                    //GridHeight = gridView.Grid.GridHeight.Value;
 
                     if (GridWidth == 1 && GridHeight == 1)
                     {
