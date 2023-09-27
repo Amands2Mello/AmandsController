@@ -18,7 +18,7 @@ using UnityEngine.EventSystems;
 
 namespace AmandsController
 {
-    [BepInPlugin("com.Amanda.Controller", "Controller", "0.2.2")]
+    [BepInPlugin("com.Amanda.Controller", "Controller", "0.2.3")]
     public class AmandsControllerPlugin : BaseUnityPlugin
     {
         public static GameObject Hook;
