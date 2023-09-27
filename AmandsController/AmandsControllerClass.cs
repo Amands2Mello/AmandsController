@@ -22,6 +22,7 @@ using EFT.Communications;
 using EFT.InventoryLogic;
 using Cutscene;
 using Diz.Binding;
+using System.Linq;
 
 namespace AmandsController
 {
@@ -77,6 +78,7 @@ namespace AmandsController
         bool LB = false;
         bool RB = false;
         bool LB_RB = false;
+        bool Interface_LB_RB = false;
 
         bool RT = false;
         bool LT = false;
@@ -185,9 +187,22 @@ namespace AmandsController
         public ScrollRectNoDrag currentScrollRectNoDrag;
         public RectTransform currentScrollRectNoDragRectTransform;
 
+        public GridView snapshotGridView;
+        public ModSlotView snapshotModSlotView;
+        public TradingTableGridView snapshotTradingTableGridView;
+        public ContainedGridsView snapshotContainedGridsView;
+        public ItemSpecificationPanel snapshotItemSpecificationPanel;
+        public SlotView snapshotEquipmentSlotView;
+        public SlotView snapshotWeaponsSlotView;
+        public SlotView snapshotArmbandSlotView;
+        public SlotView snapshotContainersSlotView;
+        public SearchButton snapshotSearchButton;
+
+
         public Vector2 globalPosition = Vector2.zero;
         public Vector2 tglobalPosition = Vector2.zero;
         public Vector2Int gridViewLocation = Vector2Int.one;
+        public Vector2Int SnapshotGridViewLocation = Vector2Int.one;
         public Vector2Int lastDirection = Vector2Int.zero;
 
         public List<Vector2> gridViewsDebug = new List<Vector2>();
@@ -208,7 +223,8 @@ namespace AmandsController
         public Vector2 AimAssistDebugPoint2 = Vector2.zero;
         public Vector2 AimAssistDebugPoint3 = Vector2.zero;
 
-        public ItemView itemView = null;
+        //public ItemView itemView = null;
+        public ItemView DraggingItemView = null;
         public PointerEventData pointerEventData = null;
         public EventSystem eventSystem = null;
         public bool Dragging = false;
@@ -227,6 +243,11 @@ namespace AmandsController
         public MethodInfo QuickFindAppropriatePlace;
         public MethodInfo CanExecute;
         public MethodInfo RunNetworkTransaction;
+
+        public MethodInfo ItemUIContextMethod_0;
+        private object[] ItemUIContextMethod_0InvokeParameters = new object[2] { typeof(Item), EBoundItem.Item4 };
+
+        private ItemView onPointerEnterItemView;
 
         public void OnGUI()
         {
@@ -587,6 +608,7 @@ namespace AmandsController
         }
         public void Start()
         {
+            ItemUIContextMethod_0 = typeof(EFT.UI.ItemUiContext).GetMethod("method_0", BindingFlags.Instance | BindingFlags.NonPublic);
             TranslateInput = typeof(InputTree).GetMethod("TranslateInput", BindingFlags.Instance | BindingFlags.NonPublic);
             Press = typeof(Button).GetMethod("Press", BindingFlags.Instance | BindingFlags.NonPublic);
             ExecuteMiddleClick = typeof(ItemView).GetMethod("ExecuteMiddleClick", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -772,6 +794,25 @@ namespace AmandsController
                 {
                     LB_RB = false;
                     ActiveAmandsControllerSets.Remove("LB_RB");
+                }
+            }
+            if (gamepad.Buttons.HasFlag(GamepadButtonFlags.LeftShoulder | GamepadButtonFlags.RightShoulder) && Interface)
+            {
+                if (!Interface_LB_RB)
+                {
+                    Interface_LB_RB = true;
+                    if (AmandsControllerSets.ContainsKey("Interface_LB_RB") && !ActiveAmandsControllerSets.Contains("Interface_LB_RB"))
+                    {
+                        ActiveAmandsControllerSets.Add("Interface_LB_RB");
+                    }
+                }
+            }
+            else
+            {
+                if (Interface_LB_RB)
+                {
+                    Interface_LB_RB = false;
+                    ActiveAmandsControllerSets.Remove("Interface_LB_RB");
                 }
             }
             if (gamepad.Buttons.HasFlag(GamepadButtonFlags.LeftThumb))
@@ -1176,7 +1217,7 @@ namespace AmandsController
             AmandsControllerSets["RB"][EAmandsControllerButton.X].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.UnloadMagazine }, EAmandsControllerCommand.InputTree, EAmandsControllerPressType.DoubleClick, 1, ""));
 
             AmandsControllerSets["RB"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.EnableSet, EAmandsControllerPressType.Press, 1, "Movement") });
-            AmandsControllerSets["RB"][EAmandsControllerButton.B].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.DisplayTimer }, EAmandsControllerCommand.DisableSet, EAmandsControllerPressType.Release, 1, "Movement"));
+            AmandsControllerSets["RB"][EAmandsControllerButton.B].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.None }, EAmandsControllerCommand.DisableSet, EAmandsControllerPressType.Release, 1, "Movement"));
 
             AmandsControllerSets["RB"].Add(EAmandsControllerButton.Y, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand> { ECommand.FoldStock }, EAmandsControllerCommand.InputTree, EAmandsControllerPressType.Press, 1, "") });
             AmandsControllerSets["RB"][EAmandsControllerButton.Y].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.CheckChamber }, EAmandsControllerCommand.InputTree, EAmandsControllerPressType.Hold, 1, ""));
@@ -1219,15 +1260,15 @@ namespace AmandsController
             AmandsControllerSets["Movement"].Add(EAmandsControllerButton.UP, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand> { ECommand.NextWalkPose }, EAmandsControllerCommand.InputTree, EAmandsControllerPressType.Press, 3, "") });
             AmandsControllerSets["Movement"].Add(EAmandsControllerButton.DOWN, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand> { ECommand.PreviousWalkPose }, EAmandsControllerCommand.InputTree, EAmandsControllerPressType.Press, 3, "") });
             AmandsControllerSets["Movement"].Add(EAmandsControllerButton.LEFT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.SlowLeanLeft, EAmandsControllerPressType.Press, 3, "") });
-            AmandsControllerSets["Movement"][EAmandsControllerButton.LEFT].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.DisplayTimer }, EAmandsControllerCommand.EndSlowLean, EAmandsControllerPressType.Release, 3, ""));
+            AmandsControllerSets["Movement"][EAmandsControllerButton.LEFT].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.None }, EAmandsControllerCommand.EndSlowLean, EAmandsControllerPressType.Release, 3, ""));
             AmandsControllerSets["Movement"].Add(EAmandsControllerButton.RIGHT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.SlowLeanRight, EAmandsControllerPressType.Press, 3, "") });
-            AmandsControllerSets["Movement"][EAmandsControllerButton.RIGHT].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.DisplayTimer }, EAmandsControllerCommand.EndSlowLean, EAmandsControllerPressType.Release, 3, ""));
+            AmandsControllerSets["Movement"][EAmandsControllerButton.RIGHT].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.None }, EAmandsControllerCommand.EndSlowLean, EAmandsControllerPressType.Release, 3, ""));
             AmandsControllerSets["Movement"].Add(EAmandsControllerButton.LeftThumb, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.RestoreLean, EAmandsControllerPressType.Press, 3, "") });
 
             AmandsControllerSets.Add("Aiming", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
             AmandsControllerSets["Aiming"].Add(EAmandsControllerButton.RightThumb, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand> { ECommand.ToggleBreathing }, EAmandsControllerCommand.InputTree, EAmandsControllerPressType.Press, 4, "") });
             AmandsControllerSets["Aiming"].Add(EAmandsControllerButton.RightShoulder, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.EnableSet, EAmandsControllerPressType.Press, 4, "Aiming_RB") });
-            AmandsControllerSets["Aiming"][EAmandsControllerButton.RightShoulder].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.DisplayTimer }, EAmandsControllerCommand.DisableSet, EAmandsControllerPressType.Release, 4, "Aiming_RB"));
+            AmandsControllerSets["Aiming"][EAmandsControllerButton.RightShoulder].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.None }, EAmandsControllerCommand.DisableSet, EAmandsControllerPressType.Release, 4, "Aiming_RB"));
 
             AmandsControllerSets.Add("Aiming_RB", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
             AmandsControllerSets["Aiming_RB"].Add(EAmandsControllerButton.UP, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand> { ECommand.OpticCalibrationSwitchUp }, EAmandsControllerCommand.InputTree, EAmandsControllerPressType.Press, 4, "") });
@@ -1235,17 +1276,17 @@ namespace AmandsController
 
             AmandsControllerSets.Add("Interface", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
             AmandsControllerSets["Interface"].Add(EAmandsControllerButton.UP, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.InterfaceUp, EAmandsControllerPressType.Press, 20, "") });
-            AmandsControllerSets["Interface"][EAmandsControllerButton.UP].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.DisplayTimer }, EAmandsControllerCommand.InterfaceDisableAutoMove, EAmandsControllerPressType.Release, 20, ""));
+            AmandsControllerSets["Interface"][EAmandsControllerButton.UP].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.None }, EAmandsControllerCommand.InterfaceDisableAutoMove, EAmandsControllerPressType.Release, 20, ""));
             AmandsControllerSets["Interface"].Add(EAmandsControllerButton.DOWN, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.InterfaceDown, EAmandsControllerPressType.Press, 20, "") });
-            AmandsControllerSets["Interface"][EAmandsControllerButton.DOWN].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.DisplayTimer }, EAmandsControllerCommand.InterfaceDisableAutoMove, EAmandsControllerPressType.Release, 20, ""));
+            AmandsControllerSets["Interface"][EAmandsControllerButton.DOWN].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.None }, EAmandsControllerCommand.InterfaceDisableAutoMove, EAmandsControllerPressType.Release, 20, ""));
             AmandsControllerSets["Interface"].Add(EAmandsControllerButton.LEFT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.InterfaceLeft, EAmandsControllerPressType.Press, 20, "") });
-            AmandsControllerSets["Interface"][EAmandsControllerButton.LEFT].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.DisplayTimer }, EAmandsControllerCommand.InterfaceDisableAutoMove, EAmandsControllerPressType.Release, 20, ""));
+            AmandsControllerSets["Interface"][EAmandsControllerButton.LEFT].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.None }, EAmandsControllerCommand.InterfaceDisableAutoMove, EAmandsControllerPressType.Release, 20, ""));
             AmandsControllerSets["Interface"].Add(EAmandsControllerButton.RIGHT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.InterfaceRight, EAmandsControllerPressType.Press, 20, "") });
-            AmandsControllerSets["Interface"][EAmandsControllerButton.RIGHT].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.DisplayTimer }, EAmandsControllerCommand.InterfaceDisableAutoMove, EAmandsControllerPressType.Release, 20, ""));
+            AmandsControllerSets["Interface"][EAmandsControllerButton.RIGHT].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.None }, EAmandsControllerCommand.InterfaceDisableAutoMove, EAmandsControllerPressType.Release, 20, ""));
             AmandsControllerSets["Interface"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.BeginDrag, EAmandsControllerPressType.Press, 20, "") });
             AmandsControllerSets["Interface"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand> { ECommand.Escape }, EAmandsControllerCommand.InputTree, EAmandsControllerPressType.Press, 20, "") });
             AmandsControllerSets["Interface"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.Use, EAmandsControllerPressType.Press, 20, "") });
-            AmandsControllerSets["Interface"][EAmandsControllerButton.X].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.DisplayTimer }, EAmandsControllerCommand.UseHold, EAmandsControllerPressType.Hold, 20, ""));
+            AmandsControllerSets["Interface"][EAmandsControllerButton.X].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.None }, EAmandsControllerCommand.UseHold, EAmandsControllerPressType.Hold, 20, ""));
             AmandsControllerSets["Interface"].Add(EAmandsControllerButton.Y, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.QuickMove, EAmandsControllerPressType.Press, 20, "") });
             AmandsControllerSets["Interface"].Add(EAmandsControllerButton.RightThumb, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.Discard, EAmandsControllerPressType.Press, 20, "") });
 
@@ -1253,8 +1294,22 @@ namespace AmandsController
             AmandsControllerSets["OnDrag"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.EndDrag, EAmandsControllerPressType.Press, 22, "") });
             AmandsControllerSets["OnDrag"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.EndDrag, EAmandsControllerPressType.Press, 22, "") });
 
+            AmandsControllerSets["Interface"].Add(EAmandsControllerButton.LeftShoulder, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.EnableSet, EAmandsControllerPressType.Press, 20, "Interface_LB") });
+            AmandsControllerSets["Interface"][EAmandsControllerButton.LeftShoulder].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.None }, EAmandsControllerCommand.DisableSet, EAmandsControllerPressType.Release, 20, "Interface_LB"));
+
+            AmandsControllerSets.Add("Interface_LB", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
+            AmandsControllerSets["Interface_LB"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.InterfaceBind4, EAmandsControllerPressType.Press, 21, "") });
+            AmandsControllerSets["Interface_LB"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.InterfaceBind5, EAmandsControllerPressType.Press, 21, "") });
+            AmandsControllerSets["Interface_LB"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.InterfaceBind6, EAmandsControllerPressType.Press, 21, "") });
+            AmandsControllerSets["Interface_LB"].Add(EAmandsControllerButton.Y, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.InterfaceBind7, EAmandsControllerPressType.Press, 21, "") });
+
+            AmandsControllerSets.Add("Interface_LB_RB", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
+            AmandsControllerSets["Interface_LB_RB"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.InterfaceBind8, EAmandsControllerPressType.Press, 22, "") });
+            AmandsControllerSets["Interface_LB_RB"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.InterfaceBind9, EAmandsControllerPressType.Press, 22, "") });
+            AmandsControllerSets["Interface_LB_RB"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.InterfaceBind10, EAmandsControllerPressType.Press, 22, "") });
+
             AmandsControllerSets.Add("SearchButton", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
-            AmandsControllerSets["SearchButton"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.Search, EAmandsControllerPressType.Press, 21, "") });
+            AmandsControllerSets["SearchButton"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.Search, EAmandsControllerPressType.Press, 23, "") });
 
             AmandsControllerButtonBinds.Clear();
             AmandsControllerButtonBinds.Add(EAmandsControllerButton.LeftTrigger, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand> { ECommand.ToggleAlternativeShooting, ECommand.EndSprinting, ECommand.TryLowThrow }, EAmandsControllerCommand.InputTree, EAmandsControllerPressType.Press, -1, "") });
@@ -1304,6 +1359,8 @@ namespace AmandsController
             else
             {
                 ActiveAmandsControllerSets.Remove("Interface");
+                ActiveAmandsControllerSets.Remove("Interface_LB");
+                ActiveAmandsControllerSets.Remove("Interface_LB_RB");
                 ActiveAmandsControllerSets.Remove("OnDrag");
                 ActiveAmandsControllerSets.Remove("SearchButton");
             }
@@ -1525,7 +1582,7 @@ namespace AmandsController
         }
         public void AmandsControllerButton(AmandsControllerButtonBind Bind)
         {
-            ConsoleScreen.Log(Bind.PressType.ToString());
+            ConsoleScreen.Log(Bind.PressType.ToString() + " " + Bind.AmandsControllerCommand.ToString());
             switch (Bind.AmandsControllerCommand)
             {
                 case EAmandsControllerCommand.ToggleSet:
@@ -1651,6 +1708,27 @@ namespace AmandsController
                 case EAmandsControllerCommand.Discard:
                     AmandsControllerDiscard();
                     break;
+                case EAmandsControllerCommand.InterfaceBind4:
+                    AmandsControllerInterfaceBind(EBoundItem.Item4);
+                    break;
+                case EAmandsControllerCommand.InterfaceBind5:
+                    AmandsControllerInterfaceBind(EBoundItem.Item5);
+                    break;
+                case EAmandsControllerCommand.InterfaceBind6:
+                    AmandsControllerInterfaceBind(EBoundItem.Item6);
+                    break;
+                case EAmandsControllerCommand.InterfaceBind7:
+                    AmandsControllerInterfaceBind(EBoundItem.Item7);
+                    break;
+                case EAmandsControllerCommand.InterfaceBind8:
+                    AmandsControllerInterfaceBind(EBoundItem.Item8);
+                    break;
+                case EAmandsControllerCommand.InterfaceBind9:
+                    AmandsControllerInterfaceBind(EBoundItem.Item9);
+                    break;
+                case EAmandsControllerCommand.InterfaceBind10:
+                    AmandsControllerInterfaceBind(EBoundItem.Item10);
+                    break;
             }
         }
         public async void AmandsControllerButtonTimer(string Token, EAmandsControllerButton Button)
@@ -1669,17 +1747,6 @@ namespace AmandsController
                 AmandsControllerButton(AmandsControllerButtonSnapshots[Button].PressBind);
                 AsyncPress.Remove(Token);
                 AmandsControllerButtonSnapshots.Remove(Button);
-            }
-        }
-        public void AmandsControllerSearch()
-        {
-            if (Interface && currentSearchButton != null)
-            {
-                Press.Invoke(currentSearchButton, null);
-            }
-            else
-            {
-                ActiveAmandsControllerSets.Remove("SearchButton");
             }
         }
         // Controller UI
@@ -2319,11 +2386,6 @@ namespace AmandsController
                 }
             }
             return false;
-        }
-        public void ControllerUIOnMove(Vector2Int direction, Vector2 position)
-        {
-            AmandsOnDrag();
-            FindScrollRectNoDrang(position);
         }
         public void ControllerUIMove(Vector2Int direction, bool Skip)
         {
@@ -3043,6 +3105,44 @@ namespace AmandsController
             // OnMove
             ControllerUIOnMove(direction, globalPosition);
         }
+        public void ControllerUIOnMove(Vector2Int direction, Vector2 position)
+        {
+            AmandsControllerOnPointerMove();
+            AmandsControllerOnDrag();
+            FindScrollRectNoDrang(position);
+        }
+        public void ControllerUIMoveSnapshot()
+        {
+            snapshotGridView = currentGridView;
+            snapshotModSlotView = currentModSlotView;
+            snapshotTradingTableGridView = currentTradingTableGridView;
+            snapshotContainedGridsView = currentContainedGridsView;
+            snapshotItemSpecificationPanel = currentItemSpecificationPanel;
+            snapshotEquipmentSlotView = currentEquipmentSlotView;
+            snapshotWeaponsSlotView = currentWeaponsSlotView;
+            snapshotArmbandSlotView = currentArmbandSlotView;
+            snapshotContainersSlotView = currentContainersSlotView;
+            snapshotSearchButton = currentSearchButton;
+            SnapshotGridViewLocation = gridViewLocation;
+        }
+        public void ControllerUIMoveToSnapshot()
+        {
+            currentGridView = snapshotGridView;
+            currentModSlotView = snapshotModSlotView;
+            currentTradingTableGridView = snapshotTradingTableGridView;
+            currentContainedGridsView = snapshotContainedGridsView;
+            currentItemSpecificationPanel = snapshotItemSpecificationPanel;
+            currentEquipmentSlotView = snapshotEquipmentSlotView;
+            currentWeaponsSlotView = snapshotWeaponsSlotView;
+            currentArmbandSlotView = snapshotArmbandSlotView;
+            currentContainersSlotView = snapshotContainersSlotView;
+            currentSearchButton = snapshotSearchButton;
+            gridViewLocation = SnapshotGridViewLocation;
+            UpdateGlobalPosition();
+            FindGridWindow(globalPosition);
+            // OnMove
+            ControllerUIOnMove(Vector2Int.zero, globalPosition);
+        }
         public void UpdateGlobalPosition()
         {
             if (currentGridView != null)
@@ -3087,148 +3187,168 @@ namespace AmandsController
                 }
             }
         }
-        public void AmandsControllerUse(bool Hold)
+        public void AmandsControllerSearch()
+        {
+            if (Interface && currentSearchButton != null)
+            {
+                Press.Invoke(currentSearchButton, null);
+            }
+            else
+            {
+                ActiveAmandsControllerSets.Remove("SearchButton");
+            }
+        }
+        public void AmandsControllerOnPointerMove()
         {
             if (pointerEventData != null)
             {
                 pointerEventData.position = globalPosition;
-                pointerEventData.dragging = false;
+                if (onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf)
+                {
+                    onPointerEnterItemView.OnPointerExit(pointerEventData);
+                }
                 List<RaycastResult> results = new List<RaycastResult>();
                 eventSystem.RaycastAll(pointerEventData, results);
                 if (results.Count > 0)
                 {
-                    itemView = results[0].gameObject.GetComponentInParent<ItemView>();
-                    if (itemView == null)
+                    pointerEventData.pointerEnter = results[0].gameObject;
+                    onPointerEnterItemView = results[0].gameObject.GetComponentInParent<ItemView>();
+                    if (onPointerEnterItemView == null)
                     {
-                        itemView = results[0].gameObject.GetComponentInParent<GridItemView>();
+                        onPointerEnterItemView = results[0].gameObject.GetComponentInParent<GridItemView>();
                     }
-                    if (itemView == null)
+                    if (onPointerEnterItemView == null)
                     {
-                        itemView = results[0].gameObject.GetComponentInParent<SlotItemView>();
+                        onPointerEnterItemView = results[0].gameObject.GetComponentInParent<SlotItemView>();
                     }
-                    if (itemView != null)
+                    if (onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf)
                     {
-                        ItemUiContext ItemUiContext = Traverse.Create(itemView).Field("ItemUiContext").GetValue<ItemUiContext>();
-                        object NewContextInteractionsObject = Traverse.Create(itemView).Property("NewContextInteractions").GetValue();
-                        if (NewContextInteractionsObject != null)
+                        onPointerEnterItemView.OnPointerEnter(pointerEventData);
+                    }
+                }
+                else
+                {
+                    pointerEventData.pointerEnter = null;
+                    onPointerEnterItemView = null;
+                }
+            }
+        }
+        public void AmandsControllerUse(bool Hold)
+        {
+            if (onPointerEnterItemView == null || (onPointerEnterItemView != null && !onPointerEnterItemView.gameObject.activeSelf))
+            {
+                AmandsControllerOnPointerMove();
+            }
+            if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf)
+            {
+                pointerEventData.position = globalPosition;
+                ItemUiContext ItemUiContext = ItemUiContext.Instance;//Traverse.Create(onPointerEnterItemView).Field("ItemUiContext").GetValue<ItemUiContext>();
+                object NewContextInteractionsObject = Traverse.Create(onPointerEnterItemView).Property("NewContextInteractions").GetValue();
+                if (NewContextInteractionsObject != null)
+                {
+                    if (ExecuteInteraction == null)
+                    {
+                        ExecuteInteraction = NewContextInteractionsObject.GetType().GetMethod("ExecuteInteraction", BindingFlags.Instance | BindingFlags.Public);
+                    }
+                    if (IsInteractionAvailable == null)
+                    {
+                        IsInteractionAvailable = NewContextInteractionsObject.GetType().GetMethod("IsInteractionAvailable", BindingFlags.Instance | BindingFlags.Public);
+                    }
+                }
+                if (!onPointerEnterItemView.IsSearched && ExecuteMiddleClick != null && (bool)ExecuteMiddleClick.Invoke(onPointerEnterItemView, null)) return;
+                if (ItemUiContext == null || !onPointerEnterItemView.IsSearched) return;
+                TraderControllerClass ItemController = Traverse.Create(onPointerEnterItemView).Field("ItemController").GetValue<TraderControllerClass>();
+                if (ExecuteInteraction != null && IsInteractionAvailable != null)
+                {
+                    if (onPointerEnterItemView.Item is FoodClass || onPointerEnterItemView.Item is MedsClass)
+                    {
+                        ExecuteInteractionInvokeParameters[0] = EItemInfoButton.Use;
+                        if (!(bool)ExecuteInteraction.Invoke(NewContextInteractionsObject, ExecuteInteractionInvokeParameters))
                         {
-                            if (ExecuteInteraction == null)
-                            {
-                                ExecuteInteraction = NewContextInteractionsObject.GetType().GetMethod("ExecuteInteraction", BindingFlags.Instance | BindingFlags.Public);
-                            }
-                            if (IsInteractionAvailable == null)
-                            {
-                                IsInteractionAvailable = NewContextInteractionsObject.GetType().GetMethod("IsInteractionAvailable", BindingFlags.Instance | BindingFlags.Public);
-                            }
+                            ExecuteInteractionInvokeParameters[0] = EItemInfoButton.UseAll;
+                            ExecuteInteraction.Invoke(NewContextInteractionsObject, ExecuteInteractionInvokeParameters);
                         }
-                        if (!itemView.IsSearched && ExecuteMiddleClick != null && (bool)ExecuteMiddleClick.Invoke(itemView, null)) return;
-                        if (ItemUiContext == null || !itemView.IsSearched) return;
-                        TraderControllerClass ItemController = Traverse.Create(itemView).Field("ItemController").GetValue<TraderControllerClass>();
-                        if (ExecuteInteraction != null && IsInteractionAvailable != null)
-                        {
-                            if (itemView.Item is FoodClass || itemView.Item is MedsClass)
-                            {
-                                ExecuteInteractionInvokeParameters[0] = EItemInfoButton.Use;
-                                if (!(bool)ExecuteInteraction.Invoke(NewContextInteractionsObject, ExecuteInteractionInvokeParameters))
-                                {
-                                    ExecuteInteractionInvokeParameters[0] = EItemInfoButton.UseAll;
-                                    ExecuteInteraction.Invoke(NewContextInteractionsObject, ExecuteInteractionInvokeParameters);
-                                }
-                                return;
-                            }
-                            if (itemView.Item.IsContainer && !Hold)
-                            {
-                                ExecuteInteractionInvokeParameters[0] = EItemInfoButton.Open;
-                                if ((bool)ExecuteInteraction.Invoke(NewContextInteractionsObject, ExecuteInteractionInvokeParameters)) return;
-                            }
-                            //ExecuteInteractionInvokeParameters[0] = itemView.Item.IsContainer ? EItemInfoButton.Open : EItemInfoButton.Inspect;
-                            //if (itemView.Item.IsContainer && (bool)ExecuteInteraction.Invoke(NewContextInteractionsObject, ExecuteInteractionInvokeParameters)) return;
+                        return;
+                    }
+                    if (onPointerEnterItemView.Item.IsContainer && !Hold)
+                    {
+                        ExecuteInteractionInvokeParameters[0] = EItemInfoButton.Open;
+                        if ((bool)ExecuteInteraction.Invoke(NewContextInteractionsObject, ExecuteInteractionInvokeParameters)) return;
+                    }
+                    //ExecuteInteractionInvokeParameters[0] = onPointerEnterItemView.Item.IsContainer ? EItemInfoButton.Open : EItemInfoButton.Inspect;
+                    //if (onPointerEnterItemView.Item.IsContainer && (bool)ExecuteInteraction.Invoke(NewContextInteractionsObject, ExecuteInteractionInvokeParameters)) return;
 
-                            SimpleTooltip tooltip = ItemUiContext.Tooltip;
-                            IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Equip;
-                            if (!Hold && (bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters))
-                            {
-                                ItemUiContext.QuickEquip(itemView.Item).HandleExceptions();
-                                if (tooltip != null)
-                                {
-                                    tooltip.Close();
-                                }
-                                return;
-                            }
-                            else
-                            {
-                                bool IsBeingLoadedMagazine = Traverse.Create(Traverse.Create(itemView).Property("IsBeingLoadedMagazine").GetValue<object>()).Field("gparam_0").GetValue<bool>();
-                                bool IsBeingUnloadedMagazine = Traverse.Create(Traverse.Create(itemView).Property("IsBeingUnloadedMagazine").GetValue<object>()).Field("gparam_0").GetValue<bool>();
-                                if (IsBeingLoadedMagazine || IsBeingUnloadedMagazine)
-                                {
-                                    ItemController.StopProcesses();
-                                    return;
-                                }
-                            }
-                            ExecuteInteractionInvokeParameters[0] = EItemInfoButton.CheckMagazine;
-                            if ((bool)ExecuteInteraction.Invoke(NewContextInteractionsObject, ExecuteInteractionInvokeParameters)) return;
-                            if (ExecuteMiddleClick != null && (bool)ExecuteMiddleClick.Invoke(itemView, null)) return;
+                    SimpleTooltip tooltip = ItemUiContext.Tooltip;
+                    IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Equip;
+                    if (!Hold && (bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters))
+                    {
+                        ItemUiContext.QuickEquip(onPointerEnterItemView.Item).HandleExceptions();
+                        if (tooltip != null)
+                        {
+                            tooltip.Close();
+                        }
+                        AmandsControllerOnPointerMove();
+                        return;
+                    }
+                    else
+                    {
+                        bool IsBeingLoadedMagazine = Traverse.Create(Traverse.Create(onPointerEnterItemView).Property("IsBeingLoadedMagazine").GetValue<object>()).Field("gparam_0").GetValue<bool>();
+                        bool IsBeingUnloadedMagazine = Traverse.Create(Traverse.Create(onPointerEnterItemView).Property("IsBeingUnloadedMagazine").GetValue<object>()).Field("gparam_0").GetValue<bool>();
+                        if (IsBeingLoadedMagazine || IsBeingUnloadedMagazine)
+                        {
+                            ItemController.StopProcesses();
+                            return;
                         }
                     }
+                    ExecuteInteractionInvokeParameters[0] = EItemInfoButton.CheckMagazine;
+                    if ((bool)ExecuteInteraction.Invoke(NewContextInteractionsObject, ExecuteInteractionInvokeParameters)) return;
+                    if (ExecuteMiddleClick != null && (bool)ExecuteMiddleClick.Invoke(onPointerEnterItemView, null)) return;
                 }
             }
         }
         public void AmandsControllerQuickMove()
         {
-            if (pointerEventData != null)
+            if (onPointerEnterItemView == null || (onPointerEnterItemView != null && !onPointerEnterItemView.gameObject.activeSelf))
+            {
+                AmandsControllerOnPointerMove();
+            }
+            if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf)
             {
                 pointerEventData.position = globalPosition;
-                pointerEventData.dragging = false;
-                List<RaycastResult> results = new List<RaycastResult>();
-                eventSystem.RaycastAll(pointerEventData, results);
-                if (results.Count > 0)
+                ItemUiContext ItemUiContext = ItemUiContext.Instance;//Traverse.Create(onPointerEnterItemView).Field("ItemUiContext").GetValue<ItemUiContext>();
+                if (ItemUiContext == null || !onPointerEnterItemView.IsSearched) return;
+                TraderControllerClass ItemController = Traverse.Create(onPointerEnterItemView).Field("ItemController").GetValue<TraderControllerClass>();
+                SimpleTooltip tooltip = ItemUiContext.Tooltip;
+                //GStruct374 gstruct = ItemUiContext.QuickFindAppropriatePlace(onPointerEnterItemView.ItemContext, ItemController, false, true, true);
+                object ItemContext = Traverse.Create(onPointerEnterItemView).Property("ItemContext").GetValue<object>();
+                if (ItemContext != null)
                 {
-                    itemView = results[0].gameObject.GetComponentInParent<ItemView>();
-                    if (itemView == null)
+                    object gstructObject = QuickFindAppropriatePlace.Invoke(ItemUiContext, new object[5] { ItemContext, ItemController, false, true, true });
+                    if (gstructObject != null)
                     {
-                        itemView = results[0].gameObject.GetComponentInParent<GridItemView>();
-                    }
-                    if (itemView == null)
-                    {
-                        itemView = results[0].gameObject.GetComponentInParent<SlotItemView>();
-                    }
-                    if (itemView != null)
-                    {
-                        ItemUiContext ItemUiContext = Traverse.Create(itemView).Field("ItemUiContext").GetValue<ItemUiContext>();
-                        if (ItemUiContext == null || !itemView.IsSearched) return;
-                        TraderControllerClass ItemController = Traverse.Create(itemView).Field("ItemController").GetValue<TraderControllerClass>();
-                        SimpleTooltip tooltip = ItemUiContext.Tooltip;
-                        //GStruct374 gstruct = ItemUiContext.QuickFindAppropriatePlace(itemView.ItemContext, ItemController, false, true, true);
-                        object ItemContext = Traverse.Create(itemView).Property("ItemContext").GetValue<object>();
-                        if (ItemContext != null)
+                        bool Failed = Traverse.Create(gstructObject).Property("Failed").GetValue<bool>();
+                        if (Failed) return;
+                        object Value = Traverse.Create(gstructObject).Field("Value").GetValue<object>();
+                        if (Value != null)
                         {
-                            object gstructObject = QuickFindAppropriatePlace.Invoke(ItemUiContext, new object[5] { ItemContext, ItemController, false, true, true });
-                            if (gstructObject != null)
+                            if (!(bool)CanExecute.Invoke(ItemController, new object[1] { Value }))
                             {
-                                bool Failed = Traverse.Create(gstructObject).Property("Failed").GetValue<bool>();
-                                if (Failed) return;
-                                object Value = Traverse.Create(gstructObject).Field("Value").GetValue<object>();
-                                if (Value != null)
-                                {
-                                    if (!(bool)CanExecute.Invoke(ItemController, new object[1] { Value }))
-                                    {
-                                        return;
-                                    }
-                                    bool ItemsDestroyRequired = Traverse.Create(Value).Field("ItemsDestroyRequired").GetValue<bool>();
-                                    if (ItemsDestroyRequired)
-                                    {
-                                        NotificationManagerClass.DisplayWarningNotification("DiscardLimit", ENotificationDurationType.Default);
-                                        return;
-                                    }
-                                    string itemSound = itemView.Item.ItemSound;
-                                    RunNetworkTransaction.Invoke(ItemController, new object[2] { Value, null });
-                                    if (tooltip != null)
-                                    {
-                                        tooltip.Close();
-                                    }
-                                    Singleton<GUISounds>.Instance.PlayItemSound(itemSound, EInventorySoundType.pickup, false);
-                                }
+                                return;
                             }
+                            bool ItemsDestroyRequired = Traverse.Create(Value).Field("ItemsDestroyRequired").GetValue<bool>();
+                            if (ItemsDestroyRequired)
+                            {
+                                NotificationManagerClass.DisplayWarningNotification("DiscardLimit", ENotificationDurationType.Default);
+                                return;
+                            }
+                            string itemSound = onPointerEnterItemView.Item.ItemSound;
+                            RunNetworkTransaction.Invoke(ItemController, new object[2] { Value, null });
+                            if (tooltip != null)
+                            {
+                                tooltip.Close();
+                            }
+                            Singleton<GUISounds>.Instance.PlayItemSound(itemSound, EInventorySoundType.pickup, false);
+                            AmandsControllerOnPointerMove();
                         }
                     }
                 }
@@ -3236,107 +3356,73 @@ namespace AmandsController
         }
         public void AmandsControllerDiscard()
         {
-            if (pointerEventData != null)
+            if (onPointerEnterItemView == null || (onPointerEnterItemView != null && !onPointerEnterItemView.gameObject.activeSelf))
+            {
+                AmandsControllerOnPointerMove();
+            }
+            if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf)
             {
                 pointerEventData.position = globalPosition;
-                pointerEventData.dragging = false;
-                List<RaycastResult> results = new List<RaycastResult>();
-                eventSystem.RaycastAll(pointerEventData, results);
-                if (results.Count > 0)
+                ItemUiContext ItemUiContext = ItemUiContext.Instance;//Traverse.Create(onPointerEnterItemView).Field("ItemUiContext").GetValue<ItemUiContext>();
+                if (ItemUiContext == null || !onPointerEnterItemView.IsSearched) return;
+                object NewContextInteractionsObject = Traverse.Create(onPointerEnterItemView).Property("NewContextInteractions").GetValue();
+                if (NewContextInteractionsObject != null)
                 {
-                    itemView = results[0].gameObject.GetComponentInParent<ItemView>();
-                    if (itemView == null)
+                    if (IsInteractionAvailable == null)
                     {
-                        itemView = results[0].gameObject.GetComponentInParent<GridItemView>();
+                        IsInteractionAvailable = NewContextInteractionsObject.GetType().GetMethod("IsInteractionAvailable", BindingFlags.Instance | BindingFlags.Public);
                     }
-                    if (itemView == null)
+                }
+                if (IsInteractionAvailable != null)
+                {
+                    SimpleTooltip tooltip = ItemUiContext.Tooltip;
+                    IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Discard;
+                    if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters))
                     {
-                        itemView = results[0].gameObject.GetComponentInParent<SlotItemView>();
-                    }
-                    if (itemView != null)
-                    {
-                        ItemUiContext ItemUiContext = Traverse.Create(itemView).Field("ItemUiContext").GetValue<ItemUiContext>();
-                        if (ItemUiContext == null || !itemView.IsSearched) return;
-                        object NewContextInteractionsObject = Traverse.Create(itemView).Property("NewContextInteractions").GetValue();
-                        if (NewContextInteractionsObject != null)
+                        ItemUiContext.ThrowItem(onPointerEnterItemView.Item).HandleExceptions();
+                        if (tooltip != null)
                         {
-                            if (IsInteractionAvailable == null)
-                            {
-                                IsInteractionAvailable = NewContextInteractionsObject.GetType().GetMethod("IsInteractionAvailable", BindingFlags.Instance | BindingFlags.Public);
-                            }
+                            tooltip.Close();
                         }
-                        if (IsInteractionAvailable != null)
-                        {
-                            SimpleTooltip tooltip = ItemUiContext.Tooltip;
-                            IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Discard;
-                            if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters))
-                            {
-                                ItemUiContext.ThrowItem(itemView.Item).HandleExceptions();
-                                if (tooltip != null)
-                                {
-                                    tooltip.Close();
-                                }
-                                return;
-                            }
-                        }
+                        AmandsControllerOnPointerMove();
+                        return;
                     }
                 }
             }
         }
         public void AmandsControllerBeginDrag()
         {
-            if (!Dragging && pointerEventData != null)
+            if (onPointerEnterItemView == null || (onPointerEnterItemView != null && !onPointerEnterItemView.gameObject.activeSelf))
             {
+                AmandsControllerOnPointerMove();
+            }
+            if (!Dragging && pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf)
+            {
+                ControllerUIMoveSnapshot();
                 pointerEventData.position = globalPosition;
                 pointerEventData.dragging = false;
-                List<RaycastResult> results = new List<RaycastResult>();
-                eventSystem.RaycastAll(pointerEventData, results);
-                if (results.Count > 0)
+                DraggingItemView = onPointerEnterItemView;
+                DraggingItemView.OnBeginDrag(pointerEventData);
+                pointerEventData.dragging = true;
+                Dragging = true;
+                if (AmandsControllerSets.ContainsKey("OnDrag") && !ActiveAmandsControllerSets.Contains("OnDrag"))
                 {
-                    itemView = results[0].gameObject.GetComponentInParent<ItemView>();
-                    if (itemView == null)
-                    {
-                        itemView = results[0].gameObject.GetComponentInParent<GridItemView>();
-                    }
-                    if (itemView == null)
-                    {
-                        itemView = results[0].gameObject.GetComponentInParent<SlotItemView>();
-                    }
-                    if (itemView != null)
-                    {
-                        itemView.OnBeginDrag(pointerEventData);
-                        Dragging = true;
-                        pointerEventData.dragging = true;
-                        if (AmandsControllerSets.ContainsKey("OnDrag") && !ActiveAmandsControllerSets.Contains("OnDrag"))
-                        {
-                            ActiveAmandsControllerSets.Add("OnDrag");
-                        }
-                        AmandsOnDrag();
-                    }
+                    ActiveAmandsControllerSets.Add("OnDrag");
                 }
+                AmandsControllerOnPointerMove();
+                AmandsControllerOnDrag();
             }
         }
-        public void AmandsOnDrag()
+        public void AmandsControllerOnDrag()
         {
-            if (pointerEventData != null)
+            if (Dragging && pointerEventData != null)
             {
                 pointerEventData.position = globalPosition;
-                if (itemView != null && itemView.BeingDragged)
+                if (DraggingItemView != null && DraggingItemView.gameObject.activeSelf && DraggingItemView.BeingDragged)
                 {
-                    List<RaycastResult> results = new List<RaycastResult>();
-                    eventSystem.RaycastAll(pointerEventData, results);
-                    if (results.Count > 0)
-                    {
-                        pointerEventData.pointerEnter = results[0].gameObject;
-                        itemView.OnDrag(pointerEventData);
-                    }
-                    else
-                    {
-                        pointerEventData.pointerEnter = null;
-                        itemView.OnDrag(pointerEventData);
-                    }
+                    DraggingItemView.OnDrag(pointerEventData);
                 }
-                else if (itemView != null && !itemView.BeingDragged)
+                else if (DraggingItemView != null && DraggingItemView.gameObject.activeSelf && !DraggingItemView.BeingDragged)
                 {
                     AmandsControllerCancelDrag();
                 }
@@ -3346,18 +3432,18 @@ namespace AmandsController
         {
             if (Dragging && pointerEventData != null)
             {
-                List<RaycastResult> results = new List<RaycastResult>();
-                eventSystem.RaycastAll(pointerEventData, results);
-                if (results.Count > 0)
+                pointerEventData.position = globalPosition;
+                if (pointerEventData.pointerEnter != null)
                 {
                     Dragging = false;
-                    pointerEventData.pointerEnter = results[0].gameObject;
-                    pointerEventData.dragging = false;
-                    if (itemView != null)
-                    {
-                        itemView.OnEndDrag(pointerEventData);
-                    }
                     ActiveAmandsControllerSets.Remove("OnDrag");
+                    pointerEventData.dragging = false;
+                    if (DraggingItemView != null && DraggingItemView.gameObject.activeSelf)
+                    {
+                        DraggingItemView.OnEndDrag(pointerEventData);
+                        DraggingItemView = null;
+                        AmandsControllerOnPointerMove();
+                    }
                 }
                 else
                 {
@@ -3367,16 +3453,64 @@ namespace AmandsController
         }
         public void AmandsControllerCancelDrag()
         {
-            if (Dragging && pointerEventData != null)
+            if (Dragging)
             {
                 Dragging = false;
+                ActiveAmandsControllerSets.Remove("OnDrag");
+                PointerEventData pointerEventData = new PointerEventData(eventSystem);
+                pointerEventData.button = PointerEventData.InputButton.Left;
+                pointerEventData.position = globalPosition;
                 pointerEventData.pointerEnter = null;
                 pointerEventData.dragging = false;
-                if (itemView != null)
+                if (DraggingItemView != null && DraggingItemView.gameObject.activeSelf)
                 {
-                    itemView.OnEndDrag(pointerEventData);
+                    DraggingItemView.OnEndDrag(pointerEventData);
+                    DraggingItemView = null;
+                    ControllerUIMoveToSnapshot();
                 }
-                ActiveAmandsControllerSets.Remove("OnDrag");
+            }
+        }
+        public void AmandsControllerInterfaceBind(EBoundItem bindIndex)
+        {
+            if (onPointerEnterItemView == null || (onPointerEnterItemView != null && !onPointerEnterItemView.gameObject.activeSelf))
+            {
+                AmandsControllerOnPointerMove();
+            }
+            if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf)
+            {
+                pointerEventData.position = globalPosition;
+                ItemUiContext ItemUiContext = ItemUiContext.Instance;//Traverse.Create(onPointerEnterItemView).Field("ItemUiContext").GetValue<ItemUiContext>();
+                if (ItemUiContext != null && onPointerEnterItemView.Item != null && ItemUIContextMethod_0 != null)
+                {
+                    ItemUIContextMethod_0InvokeParameters[0] = onPointerEnterItemView.Item;
+                    ItemUIContextMethod_0InvokeParameters[1] = bindIndex;
+                    ItemUIContextMethod_0.Invoke(ItemUiContext, ItemUIContextMethod_0InvokeParameters);
+                }
+                /*pointerEventData.position = globalPosition;
+                List<RaycastResult> results = new List<RaycastResult>();
+                eventSystem.RaycastAll(pointerEventData, results);
+                if (results.Count > 0)
+                {
+                    itemView = results[0].gameObject.GetComponentInParent<ItemView>();
+                    if (itemView == null)
+                    {
+                        itemView = results[0].gameObject.GetComponentInParent<GridItemView>();
+                    }
+                    if (itemView == null)
+                    {
+                        itemView = results[0].gameObject.GetComponentInParent<SlotItemView>();
+                    }
+                    if (itemView != null)
+                    {
+                        ItemUiContext ItemUiContext = Traverse.Create(itemView).Field("ItemUiContext").GetValue<ItemUiContext>();
+                        if (ItemUiContext != null && itemView.Item != null && ItemUIContextMethod_0 != null)
+                        {
+                            ItemUIContextMethod_0InvokeParameters[0] = itemView.Item;
+                            ItemUIContextMethod_0InvokeParameters[1] = bindIndex;
+                            ItemUIContextMethod_0.Invoke(ItemUiContext, ItemUIContextMethod_0InvokeParameters);
+                        }
+                    }
+                }*/
             }
         }
         public void gridslotDebug()
@@ -3550,6 +3684,13 @@ namespace AmandsController
         Use = 18,
         UseHold = 19,
         QuickMove = 20,
-        Discard = 21
+        Discard = 21,
+        InterfaceBind4 = 22,
+        InterfaceBind5 = 23,
+        InterfaceBind6 = 24,
+        InterfaceBind7 = 25,
+        InterfaceBind8 = 26,
+        InterfaceBind9 = 27,
+        InterfaceBind10 = 28
     }
 }
