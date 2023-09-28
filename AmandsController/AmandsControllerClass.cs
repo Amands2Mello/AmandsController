@@ -98,7 +98,7 @@ namespace AmandsController
         float StateSpeedLimit = 0f;
         float MaxSpeed = 0f;
 
-        AmandsControllerButtonBind EmptyBind = new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.Empty, EAmandsControllerPressType.Press, -100, "");
+        AmandsControllerButtonBind EmptyBind = new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.None, EAmandsControllerPressType.Press, -100, "");
         Dictionary<string,Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>> AmandsControllerSets = new Dictionary<string, Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>>();
         List<string> ActiveAmandsControllerSets = new List<string>();
         //Dictionary<string, Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>> ActiveAmandsControllerSets = new Dictionary<string, Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>>();
@@ -172,6 +172,8 @@ namespace AmandsController
 
         public List<SearchButton> searchButtons = new List<SearchButton>();
 
+        public List<SimpleContextMenuButton> simpleContextMenuButtons = new List<SimpleContextMenuButton>();
+
         public List<ScrollRectNoDrag> scrollRectNoDrags = new List<ScrollRectNoDrag>();
 
         public GridView currentGridView;
@@ -184,6 +186,7 @@ namespace AmandsController
         public SlotView currentArmbandSlotView;
         public SlotView currentContainersSlotView;
         public SearchButton currentSearchButton;
+        public SimpleContextMenuButton currentSimpleContextMenuButton;
         public ScrollRectNoDrag currentScrollRectNoDrag;
         public RectTransform currentScrollRectNoDragRectTransform;
 
@@ -197,6 +200,7 @@ namespace AmandsController
         public SlotView snapshotArmbandSlotView;
         public SlotView snapshotContainersSlotView;
         public SearchButton snapshotSearchButton;
+        public SimpleContextMenuButton snapshotSimpleContextMenuButton;
 
 
         public Vector2 globalPosition = Vector2.zero;
@@ -232,7 +236,11 @@ namespace AmandsController
         public bool Interface = false;
         public bool AutoMove = false;
         public float AutoMoveTime = 0f;
+        public float AutoMoveTimeDelay = 0.2f;
         public float SkipMoveTime = 0f;
+        public float SkipMoveTimeDelay = 0.3f;
+
+        public bool ContextMenu = false;
 
         public MethodInfo ExecuteInteraction;
         private object[] ExecuteInteractionInvokeParameters = new object[1] { EItemInfoButton.Inspect };
@@ -248,6 +256,10 @@ namespace AmandsController
         private object[] ItemUIContextMethod_0InvokeParameters = new object[2] { typeof(Item), EBoundItem.Item4 };
 
         private ItemView onPointerEnterItemView;
+        private SimpleContextMenuButton onPointerEnterSimpleContextMenuButton;
+
+        public MethodInfo ShowContextMenu;
+        public object[] ShowContextMenuInvokeParameters = new object[1] { Vector2.zero };
 
         public void OnGUI()
         {
@@ -615,6 +627,7 @@ namespace AmandsController
             QuickFindAppropriatePlace = typeof(ItemUiContext).GetMethod("QuickFindAppropriatePlace", BindingFlags.Instance | BindingFlags.Public);
             CanExecute = typeof(TraderControllerClass).GetMethod("CanExecute", BindingFlags.Instance | BindingFlags.Public);
             RunNetworkTransaction = typeof(TraderControllerClass).GetMethod("RunNetworkTransaction", BindingFlags.Instance | BindingFlags.Public);
+            ShowContextMenu = typeof(ItemView).GetMethod("ShowContextMenu", BindingFlags.Instance | BindingFlags.NonPublic);
 
             AimAnimationCurve.keys = AimKeys;
         }
@@ -628,11 +641,16 @@ namespace AmandsController
             if (AutoMove)
             {
                 AutoMoveTime += Time.deltaTime;
-                if (AutoMoveTime > 0.2f)
+                if (AutoMoveTime > AutoMoveTimeDelay)
                 {
                     AutoMoveTime = 0f;
+                    AutoMoveTimeDelay = 0.1f;
                     ControllerUIMove(lastDirection, false);
                 }
+            }
+            else
+            {
+                AutoMoveTimeDelay = 0.2f;
             }
             if (!connected) return;
 
@@ -955,7 +973,7 @@ namespace AmandsController
             rightThumb.y = (float)gamepad.RightThumbY / maxValue;
             rightThumbXYSqrt = Mathf.Sqrt(Mathf.Pow(rightThumb.x, 2) + Mathf.Pow(rightThumb.y, 2));
 
-            if (currentScrollRectNoDrag != null && currentScrollRectNoDragRectTransform != null)
+            if (currentScrollRectNoDrag != null && currentScrollRectNoDragRectTransform != null && !ContextMenu)
             {
                 float height = currentScrollRectNoDrag.content.rect.height;
                 float position = currentScrollRectNoDragRectTransform.position.y - (currentScrollRectNoDragRectTransform.rect.height * (currentScrollRectNoDragRectTransform.pivot.y - 1f));
@@ -990,16 +1008,22 @@ namespace AmandsController
             if (Interface)
             {
                 SkipMoveTime += Time.deltaTime;
-                if (SkipMoveTime > 0.3f && (Mathf.Abs(rightThumb.x) > 0.3f || Mathf.Abs(rightThumb.y) > 0.3f))
+                if (SkipMoveTime > SkipMoveTimeDelay && (Mathf.Abs(rightThumb.x) > 0.3f || Mathf.Abs(rightThumb.y) > 0.3f))
                 {
                     SkipMoveTime = 0f;
+                    SkipMoveTimeDelay = 0.15f;
                     ControllerUIMove(new Vector2Int(rightThumb.x > 0.3f ? 1 : rightThumb.x < -0.3f ? -1 : 0, rightThumb.y > 0.3f ? 1 : rightThumb.y < -0.3f ? -1 : 0), true);
                 }
                 else if (!(Mathf.Abs(rightThumb.x) > 0.3f || Mathf.Abs(rightThumb.y) > 0.3f))
                 {
                     SkipMoveTime = 1f;
+                    SkipMoveTimeDelay = 0.3f;
                 }
                 return;
+            }
+            else
+            {
+                SkipMoveTimeDelay = 0.3f;
             }
 
             if (localPlayer == null) return;
@@ -1284,6 +1308,7 @@ namespace AmandsController
             AmandsControllerSets["Interface"].Add(EAmandsControllerButton.RIGHT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.InterfaceRight, EAmandsControllerPressType.Press, 20, "") });
             AmandsControllerSets["Interface"][EAmandsControllerButton.RIGHT].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.None }, EAmandsControllerCommand.InterfaceDisableAutoMove, EAmandsControllerPressType.Release, 20, ""));
             AmandsControllerSets["Interface"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.BeginDrag, EAmandsControllerPressType.Press, 20, "") });
+            AmandsControllerSets["Interface"][EAmandsControllerButton.A].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.None }, EAmandsControllerCommand.ShowContextMenu, EAmandsControllerPressType.Hold, 20, ""));
             AmandsControllerSets["Interface"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand> { ECommand.Escape }, EAmandsControllerCommand.InputTree, EAmandsControllerPressType.Press, 20, "") });
             AmandsControllerSets["Interface"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.Use, EAmandsControllerPressType.Press, 20, "") });
             AmandsControllerSets["Interface"][EAmandsControllerButton.X].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.None }, EAmandsControllerCommand.UseHold, EAmandsControllerPressType.Hold, 20, ""));
@@ -1310,6 +1335,14 @@ namespace AmandsController
 
             AmandsControllerSets.Add("SearchButton", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
             AmandsControllerSets["SearchButton"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.Search, EAmandsControllerPressType.Press, 23, "") });
+
+            AmandsControllerSets.Add("ContextMenu", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
+            AmandsControllerSets["ContextMenu"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.ContextMenuUse, EAmandsControllerPressType.Press, 30, "") });
+            AmandsControllerSets["ContextMenu"][EAmandsControllerButton.A].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.None }, EAmandsControllerCommand.None, EAmandsControllerPressType.Hold, 20, ""));
+            AmandsControllerSets["ContextMenu"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.None, EAmandsControllerPressType.Press, 30, "") });
+            AmandsControllerSets["ContextMenu"][EAmandsControllerButton.X].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.None }, EAmandsControllerCommand.None, EAmandsControllerPressType.Hold, 30, ""));
+            AmandsControllerSets["ContextMenu"].Add(EAmandsControllerButton.Y, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.None, EAmandsControllerPressType.Press, 30, "") });
+            AmandsControllerSets["ContextMenu"].Add(EAmandsControllerButton.RightThumb, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.None, EAmandsControllerPressType.Press, 30, "") });
 
             AmandsControllerButtonBinds.Clear();
             AmandsControllerButtonBinds.Add(EAmandsControllerButton.LeftTrigger, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand> { ECommand.ToggleAlternativeShooting, ECommand.EndSprinting, ECommand.TryLowThrow }, EAmandsControllerCommand.InputTree, EAmandsControllerPressType.Press, -1, "") });
@@ -1391,6 +1424,21 @@ namespace AmandsController
             else
             {
                 ActiveAmandsControllerSets.Remove("HealingLimbSelector");
+            }
+        }
+        public void UpdateContextMenuBinds(bool Enabled)
+        {
+            ContextMenu = Enabled;
+            if (Enabled)
+            {
+                if (AmandsControllerSets.ContainsKey("ContextMenu") && !ActiveAmandsControllerSets.Contains("ContextMenu"))
+                {
+                    ActiveAmandsControllerSets.Add("ContextMenu");
+                }
+            }
+            else
+            {
+                ActiveAmandsControllerSets.Remove("ContextMenu");
             }
         }
         public void AmandsControllerGeneratePressType(EAmandsControllerButton Button, bool Pressed)
@@ -1547,7 +1595,7 @@ namespace AmandsController
         {
             int BindPriority = -69;
             List<ECommand> PriorityCommand = new List<ECommand>();
-            EAmandsControllerCommand PriorityAmandsControllerCommand = EAmandsControllerCommand.Empty;
+            EAmandsControllerCommand PriorityAmandsControllerCommand = EAmandsControllerCommand.None;
             string PriorityAmandsControllerSet = "";
             if (AmandsControllerButtonBinds.ContainsKey(Button))
             {
@@ -1729,6 +1777,12 @@ namespace AmandsController
                 case EAmandsControllerCommand.InterfaceBind10:
                     AmandsControllerInterfaceBind(EBoundItem.Item10);
                     break;
+                case EAmandsControllerCommand.ShowContextMenu:
+                    AmandsControllerShowContextMenu();
+                    break;
+                case EAmandsControllerCommand.ContextMenuUse:
+                    AmandsControllerContextMenuUse();
+                    break;
             }
         }
         public async void AmandsControllerButtonTimer(string Token, EAmandsControllerButton Button)
@@ -1762,6 +1816,7 @@ namespace AmandsController
             currentArmbandSlotView = null;
             currentContainersSlotView = null;
             currentSearchButton = null;
+            currentSimpleContextMenuButton = null;
         }
         public bool FindGridView(Vector2 Position)
         {
@@ -2392,7 +2447,6 @@ namespace AmandsController
             ActiveAmandsControllerSets.Remove("SearchButton");
 
             lastDirection = direction;
-            if (currentGridView == null && currentTradingTableGridView == null && currentEquipmentSlotView == null && currentWeaponsSlotView == null && currentArmbandSlotView == null && currentContainersSlotView == null && currentModSlotView == null && currentSearchButton == null) currentGridView = gridViews[0];
 
             ScreenRatio = (Screen.height / 1080f);
             GridSize = 63f * ScreenRatio;
@@ -2419,7 +2473,42 @@ namespace AmandsController
             TradingTableGridView bestTradingTableGridView = null;
             ContainedGridsView bestContainedGridsView = null;
             SearchButton bestSearchButton = null;
+            SimpleContextMenuButton bestSimpleContextMenuButton = null;
             Vector2Int bestGridViewLocation = Vector2Int.one;
+
+            // Exclusive SimpleContextMenuButton Blind Search
+            if (simpleContextMenuButtons.Count > 0)
+            {
+                UpdateGlobalPosition();
+                foreach (SimpleContextMenuButton simpleContextMenuButton in simpleContextMenuButtons)
+                {
+                    if (simpleContextMenuButton == currentSimpleContextMenuButton) continue;
+
+                    position.x = simpleContextMenuButton.transform.position.x;
+                    position.y = simpleContextMenuButton.transform.position.y;
+
+                    dot = direction == Vector2Int.zero ? 1f : Vector2.Dot((globalPosition - position).normalized, -direction);
+                    distance = Vector2.Distance(globalPosition, position);
+                    score = Mathf.Lerp(distance, distance * 0.25f, dot);
+
+                    if (score < bestScore && dot > 0.4f)
+                    {
+                        bestScore = score;
+                        bestSimpleContextMenuButton = simpleContextMenuButton;
+                    }
+                }
+                if (bestSimpleContextMenuButton == null) return;
+                if (currentSimpleContextMenuButton != null)
+                {
+                    currentSimpleContextMenuButton.OnPointerExit(null);
+                }
+                currentSimpleContextMenuButton = bestSimpleContextMenuButton;
+                UpdateGlobalPosition();
+                currentSimpleContextMenuButton.OnPointerEnter(null);
+                return;
+            }
+
+            if (currentGridView == null && currentTradingTableGridView == null && currentEquipmentSlotView == null && currentWeaponsSlotView == null && currentArmbandSlotView == null && currentContainersSlotView == null && currentModSlotView == null && currentSearchButton == null) currentGridView = gridViews[0];
 
             if (Skip) goto Skip1;
 
@@ -3145,6 +3234,12 @@ namespace AmandsController
         }
         public void UpdateGlobalPosition()
         {
+            if (currentSimpleContextMenuButton != null)
+            {
+                globalPosition.x = currentSimpleContextMenuButton.transform.position.x;
+                globalPosition.y = currentSimpleContextMenuButton.transform.position.y;
+                return;
+            }
             if (currentGridView != null)
             {
                 globalPosition.x = currentGridView.transform.position.x + (GridSize * gridViewLocation.x) - (GridSize / 2f);
@@ -3277,10 +3372,10 @@ namespace AmandsController
                     }
                     //ExecuteInteractionInvokeParameters[0] = onPointerEnterItemView.Item.IsContainer ? EItemInfoButton.Open : EItemInfoButton.Inspect;
                     //if (onPointerEnterItemView.Item.IsContainer && (bool)ExecuteInteraction.Invoke(NewContextInteractionsObject, ExecuteInteractionInvokeParameters)) return;
-
+                    if (Hold && ExecuteMiddleClick != null && (bool)ExecuteMiddleClick.Invoke(onPointerEnterItemView, null)) return;
                     SimpleTooltip tooltip = ItemUiContext.Tooltip;
                     IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Equip;
-                    if (!Hold && (bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters))
+                    if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters))
                     {
                         ItemUiContext.QuickEquip(onPointerEnterItemView.Item).HandleExceptions();
                         if (tooltip != null)
@@ -3513,6 +3608,25 @@ namespace AmandsController
                 }*/
             }
         }
+        public void AmandsControllerShowContextMenu()
+        {
+            if (!ContextMenu && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf)
+            {
+                ShowContextMenuInvokeParameters[0] = globalPosition;
+                ShowContextMenu.Invoke(onPointerEnterItemView, ShowContextMenuInvokeParameters);
+            }
+        }
+        public void AmandsControllerContextMenuUse()
+        {
+            if (currentSimpleContextMenuButton != null)
+            {
+                Button _button = Traverse.Create(currentSimpleContextMenuButton).Field("_button").GetValue<Button>();
+                if (_button != null)
+                {
+                    _button.onClick.Invoke();
+                }
+            }
+        }
         public void gridslotDebug()
         {
             Vector2 position;
@@ -3663,7 +3777,7 @@ namespace AmandsController
     }
     public enum EAmandsControllerCommand
     {
-        Empty = 0,
+        None = 0,
         ToggleSet = 1,
         EnableSet = 2,
         DisableSet = 3,
@@ -3691,6 +3805,8 @@ namespace AmandsController
         InterfaceBind7 = 25,
         InterfaceBind8 = 26,
         InterfaceBind9 = 27,
-        InterfaceBind10 = 28
+        InterfaceBind10 = 28,
+        ShowContextMenu = 29,
+        ContextMenuUse = 30
     }
 }
