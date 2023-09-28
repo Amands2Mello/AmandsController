@@ -18,7 +18,7 @@ using UnityEngine.EventSystems;
 
 namespace AmandsController
 {
-    [BepInPlugin("com.Amanda.Controller", "Controller", "0.2.3")]
+    [BepInPlugin("com.Amanda.Controller", "Controller", "0.2.4")]
     public class AmandsControllerPlugin : BaseUnityPlugin
     {
         public static GameObject Hook;
@@ -104,6 +104,8 @@ namespace AmandsController
             new ContainersPanelClosePatch().Enable();
             new SearchButtonShowPatch().Enable();
             new SearchButtonClosePatch().Enable();
+            new SimpleContextMenuButtonShowPatch().Enable();
+            new SimpleContextMenuButtonClosePatch().Enable();
             new ScrollRectNoDragOnEnable().Enable();
             new ScrollRectNoDragOnDisable().Enable();
 
@@ -498,7 +500,6 @@ namespace AmandsController
         }
     }
 
-
     public class ItemSpecificationPanelShowPatch : ModulePatch
     {
         protected override MethodBase GetTargetMethod()
@@ -687,6 +688,44 @@ namespace AmandsController
                     GridView gridView = Traverse.Create(gridViewMagnifier).Field("_gridView").GetValue<GridView>();
                     AmandsControllerPlugin.AmandsControllerClassComponent.SimpleStashGridView = gridView;
                 }
+            }
+        }
+    }
+    public class SimpleContextMenuButtonShowPatch : ModulePatch
+    {
+        protected override MethodBase GetTargetMethod()
+        {
+            return typeof(SimpleContextMenuButton).GetMethod("Show", BindingFlags.Instance | BindingFlags.Public);
+        }
+        [PatchPostfix]
+        private static void PatchPostFix(ref SimpleContextMenuButton __instance)
+        {
+            AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("Show SimpleContextMenuButton");
+            if (AmandsControllerPlugin.AmandsControllerClassComponent.simpleContextMenuButtons.Contains(__instance)) return;
+            AmandsControllerPlugin.AmandsControllerClassComponent.simpleContextMenuButtons.Add(__instance);
+            if (!AmandsControllerPlugin.AmandsControllerClassComponent.ContextMenu)
+            {
+                AmandsControllerPlugin.AmandsControllerClassComponent.UpdateContextMenuBinds(true);
+                AmandsControllerPlugin.AmandsControllerClassComponent.ControllerUIMove(Vector2Int.zero, false);
+            }
+        }
+    }
+    public class SimpleContextMenuButtonClosePatch : ModulePatch
+    {
+        protected override MethodBase GetTargetMethod()
+        {
+            return typeof(SimpleContextMenuButton).GetMethod("Close", BindingFlags.Instance | BindingFlags.Public);
+        }
+        [PatchPostfix]
+        private static void PatchPostFix(ref SimpleContextMenuButton __instance)
+        {
+            if (__instance == null) return;
+            AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("Close SimpleContextMenuButton");
+            AmandsControllerPlugin.AmandsControllerClassComponent.simpleContextMenuButtons.Remove(__instance);
+            if (AmandsControllerPlugin.AmandsControllerClassComponent.simpleContextMenuButtons.Count == 0)
+            {
+                AmandsControllerPlugin.AmandsControllerClassComponent.UpdateContextMenuBinds(false);
+                AmandsControllerPlugin.AmandsControllerClassComponent.UpdateGlobalPosition();
             }
         }
     }
