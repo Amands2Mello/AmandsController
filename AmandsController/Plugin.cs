@@ -15,14 +15,16 @@ using System.Threading.Tasks;
 using Sirenix.Utilities;
 using EFT.InputSystem;
 using UnityEngine.EventSystems;
+using Unity.Burst.CompilerServices;
 
 namespace AmandsController
 {
-    [BepInPlugin("com.Amanda.Controller", "Controller", "0.2.4")]
+    [BepInPlugin("com.Amanda.Controller", "Controller", "0.2.5")]
     public class AmandsControllerPlugin : BaseUnityPlugin
     {
         public static GameObject Hook;
         public static AmandsControllerClass AmandsControllerClassComponent;
+        public static InputGetKeyDownLeftControlPatch LeftControl;
         public static ConfigEntry<int> UserIndex { get; set; }
         public static ConfigEntry<int> DebugX { get; set; }
         public static ConfigEntry<int> DebugY { get; set; }
@@ -67,7 +69,7 @@ namespace AmandsController
             MagnetismRadius = Config.Bind("Controller", "MagnetismRadius", 0.1f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 210 }));
             StickinessRadius = Config.Bind("Controller", "StickinessRadius", 0.2f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 200 }));
             AutoAimRadius = Config.Bind("Controller", "AutoAimRadius", 0.5f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 190 }));
-            AutoAimEnemyVelocity = Config.Bind("Controller", "AutoAimEnemyVelocity", 0.1f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 188 }));
+            AutoAimEnemyVelocity = Config.Bind("Controller", "AutoAimEnemyVelocity", 0.01f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 188 }));
             Radius = Config.Bind("Controller", "Radius", 5f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 180, IsAdvanced = true }));
             Sensitivity = Config.Bind("Controller", "Sensitivity", new Vector2(20f,-12f), new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 170 }));
             ScrollSensitivity = Config.Bind("Controller", "ScrollSensitivity", 1f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 168 }));
@@ -77,8 +79,8 @@ namespace AmandsController
             DeadzoneBuffer = Config.Bind("Controller", "DeadzoneBuffer", 0.5f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 130, IsAdvanced = true }));
             FloorDecimalAdd = Config.Bind("Controller", "FloorDecimalAdd", 0.005f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 120, IsAdvanced = true }));
 
-            DoubleClickDelay = Config.Bind("Controller", "DoubleClickDelay", 0.3f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 110, IsAdvanced = true }));
-            HoldDelay = Config.Bind("Controller", "HoldDelay", 0.3f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100, IsAdvanced = true }));
+            DoubleClickDelay = Config.Bind("Controller", "DoubleClickDelay", 0.25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 110, IsAdvanced = true }));
+            HoldDelay = Config.Bind("Controller", "HoldDelay", 0.25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100, IsAdvanced = true }));
 
             new AmandsLocalPlayerPatch().Enable();
             new AmandsTarkovApplicationPatch().Enable();
@@ -115,6 +117,12 @@ namespace AmandsController
             new DraggedItemViewMethod_3().Enable();
             new TooltipMethod_0().Enable();
             new SimpleStashPanelShowPatch().Enable();
+            new SplitDialogShowPatch().Enable();
+            new SplitDialogHidePatch().Enable();
+            new SearchableSlotViewShowPatch().Enable();
+            new SearchableSlotViewHidePatch().Enable();
+
+            LeftControl = new InputGetKeyDownLeftControlPatch();
         }
     }
     public class AmandsLocalPlayerPatch : ModulePatch
@@ -216,7 +224,6 @@ namespace AmandsController
         [PatchPostfix]
         private static void PatchPostFix(ref GamePlayerOwner __instance, Player player)
         {
-            ConsoleScreen.Log("GamePlayerOwner Create()");
             LocalPlayer localPlayer = player as LocalPlayer;
             if (localPlayer != null && localPlayer.IsYourPlayer)
             {
@@ -248,13 +255,11 @@ namespace AmandsController
         {
             if (__instance.GetComponentInParent<GridWindow>() != null)
             {
-                AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("Show GridWindow");
                 if (AmandsControllerPlugin.AmandsControllerClassComponent.containedGridsViews.Contains(__instance)) return;
                 AmandsControllerPlugin.AmandsControllerClassComponent.containedGridsViews.Add(__instance);
             }
             else
             {
-                AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("Show Grids");
                 foreach (GridView gridView in __instance.GridViews)
                 {
                     if (AmandsControllerPlugin.AmandsControllerClassComponent.gridViews.Contains(gridView)) continue;
@@ -274,13 +279,11 @@ namespace AmandsController
         {
             if (__instance.GetComponentInParent<GridWindow>() != null)
             {
-                AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("Show GridWindow 2");
                 if (AmandsControllerPlugin.AmandsControllerClassComponent.containedGridsViews.Contains(__instance)) return;
                 AmandsControllerPlugin.AmandsControllerClassComponent.containedGridsViews.Add(__instance);
             }
             else
             {
-                AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("Show Grids 2");
                 foreach (GridView gridView in __instance.GridViews)
                 {
                     if (AmandsControllerPlugin.AmandsControllerClassComponent.gridViews.Contains(gridView)) continue;
@@ -340,7 +343,6 @@ namespace AmandsController
 
             if (__instance.GetComponentInParent<GridWindow>() != null)
             {
-                AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("Close GridWindow");
                 foreach (GridView gridView in __instance.GridViews)
                 {
                     //if (AmandsControllerPlugin.AmandsControllerClassComponent.currentGridView == gridView) AmandsControllerPlugin.AmandsControllerClassComponent.currentGridView = null;
@@ -361,13 +363,11 @@ namespace AmandsController
             if (__instance == null) return;
             if (AmandsControllerPlugin.AmandsControllerClassComponent.tradingTableGridView == __instance)
             {
-                AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("Hide TradingTableGridView");
                 AmandsControllerPlugin.AmandsControllerClassComponent.tradingTableGridView = null;
                 //AmandsControllerPlugin.AmandsControllerClassComponent.currentTradingTableGridView = null;
                 return;
             }
             if (!AmandsControllerPlugin.AmandsControllerClassComponent.gridViews.Contains(__instance)) return;
-            AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("Hide GridView");
             //if (AmandsControllerPlugin.AmandsControllerClassComponent.currentGridView == __instance) AmandsControllerPlugin.AmandsControllerClassComponent.currentGridView = null;
             AmandsControllerPlugin.AmandsControllerClassComponent.gridViews.Remove(__instance);
         }
@@ -381,10 +381,8 @@ namespace AmandsController
         [PatchPostfix]
         private static void PatchPostFix(ref EquipmentTab __instance, InventoryControllerClass inventoryController)
         {
-            AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("Show EquipmentTab");
             if (__instance.gameObject.name == "Gear Panel")
             {
-                AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("__instance.gameObject.name == Gear Panel");
                 foreach (KeyValuePair<EquipmentSlot, SlotView> slotView in Traverse.Create(__instance).Field("_slotViews").GetValue<Dictionary<EquipmentSlot, SlotView>>())
                 {
                     if (slotView.Key == EquipmentSlot.FirstPrimaryWeapon || slotView.Key == EquipmentSlot.SecondPrimaryWeapon)
@@ -430,7 +428,6 @@ namespace AmandsController
         [PatchPostfix]
         private static void PatchPostFix(ref EquipmentTab __instance)
         {
-            AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("Hide EquipmentTab");
             if (__instance.gameObject.name == "Gear Panel")
             {
                 //AmandsControllerPlugin.AmandsControllerClassComponent.currentEquipmentSlotView = null;
@@ -460,12 +457,14 @@ namespace AmandsController
         [PatchPostfix]
         private static void PatchPostFix(ref ContainersPanel __instance)
         {
-            AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("Show ContainersPanel");
-            if (__instance.gameObject.name == "Containers Scrollview")
+            if (__instance.transform.parent.gameObject.name == "Scrollview Parent")
             {
                 foreach (KeyValuePair<EquipmentSlot, SlotView> slotView in Traverse.Create(__instance).Field("dictionary_0").GetValue<Dictionary<EquipmentSlot, SlotView>>())
                 {
-                    if (slotView.Key != EquipmentSlot.Pockets) AmandsControllerPlugin.AmandsControllerClassComponent.containersSlotViews.Add(slotView.Value);
+                    if (slotView.Key != EquipmentSlot.Pockets)
+                    {
+                        AmandsControllerPlugin.AmandsControllerClassComponent.containersSlotViews.Add(slotView.Value);
+                    }
                 }
             }
             else
@@ -473,6 +472,11 @@ namespace AmandsController
                 foreach (KeyValuePair<EquipmentSlot, SlotView> slotView in Traverse.Create(__instance).Field("dictionary_0").GetValue<Dictionary<EquipmentSlot, SlotView>>())
                 {
                     if (slotView.Key != EquipmentSlot.Pockets) AmandsControllerPlugin.AmandsControllerClassComponent.lootContainersSlotViews.Add(slotView.Value);
+                }
+                SlotView dogtagSlotView = Traverse.Create(__instance).Field("slotView_0").GetValue<SlotView>();
+                if (dogtagSlotView != null && dogtagSlotView.gameObject.activeSelf)
+                {
+                    AmandsControllerPlugin.AmandsControllerClassComponent.dogtagSlotView = dogtagSlotView;
                 }
             }
         }
@@ -486,11 +490,11 @@ namespace AmandsController
         [PatchPostfix]
         private static void PatchPostFix(ref ContainersPanel __instance)
         {
-            AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("Close ContainersPanel");
-            if (__instance.gameObject.name == "Containers Scrollview")
+            if (__instance.transform.parent.gameObject.name == "Scrollview Parent")
             {
                 //AmandsControllerPlugin.AmandsControllerClassComponent.currentContainersSlotView = null;
                 AmandsControllerPlugin.AmandsControllerClassComponent.containersSlotViews.Clear();
+                AmandsControllerPlugin.AmandsControllerClassComponent.specialSlotSlotViews.Clear();
             }
             else
             {
@@ -509,7 +513,6 @@ namespace AmandsController
         [PatchPostfix]
         private static void PatchPostFix(ref ItemSpecificationPanel __instance)
         {
-            AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("Show ItemSpecificationPanel");
             if (AmandsControllerPlugin.AmandsControllerClassComponent.itemSpecificationPanels.Contains(__instance)) return;
             AmandsControllerPlugin.AmandsControllerClassComponent.itemSpecificationPanels.Add(__instance);
         }
@@ -524,7 +527,6 @@ namespace AmandsController
         private static void PatchPostFix(ref ItemSpecificationPanel __instance)
         {
             if (__instance == null) return;
-            AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("Hide ItemSpecificationPanel");
             AmandsControllerPlugin.AmandsControllerClassComponent.itemSpecificationPanels.Remove(__instance);
         }
     }
@@ -540,13 +542,11 @@ namespace AmandsController
             if (__instance.gameObject.activeSelf)
             {
                 if (AmandsControllerPlugin.AmandsControllerClassComponent.searchButtons.Contains(__instance)) return;
-                AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("Enabled SearchButton");
                 AmandsControllerPlugin.AmandsControllerClassComponent.searchButtons.Add(__instance);
             }
             else
             {
                 if (!AmandsControllerPlugin.AmandsControllerClassComponent.searchButtons.Contains(__instance)) return;
-                AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("Disable SearchButton");
                 AmandsControllerPlugin.AmandsControllerClassComponent.searchButtons.Remove(__instance);
             }
         }
@@ -561,7 +561,6 @@ namespace AmandsController
         private static void PatchPostFix(ref SearchButton __instance)
         {
             if (!AmandsControllerPlugin.AmandsControllerClassComponent.searchButtons.Contains(__instance)) return;
-            AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("Close SearchButton");
             AmandsControllerPlugin.AmandsControllerClassComponent.searchButtons.Remove(__instance);
         }
     }
@@ -637,10 +636,7 @@ namespace AmandsController
         [PatchPrefix]
         private static void PatchPreFix(ref ItemView __instance, ref Vector2 position)
         {
-            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging)
-            {
-                position = AmandsControllerPlugin.AmandsControllerClassComponent.globalPosition;
-            }
+            if (AmandsControllerPlugin.AmandsControllerClassComponent.connected) position = AmandsControllerPlugin.AmandsControllerClassComponent.globalPosition + new Vector2(32f,-19f);
         }
     }
     public class ScrollRectNoDragOnEnable : ModulePatch
@@ -654,6 +650,13 @@ namespace AmandsController
         {
             if (!AmandsControllerPlugin.AmandsControllerClassComponent.scrollRectNoDrags.Contains(__instance))
             {
+                if (AmandsControllerPlugin.AmandsControllerClassComponent.scrollRectNoDrags.Count == 0)
+                {
+                    RectTransform rectTransform;
+                    rectTransform = __instance.GetComponent<RectTransform>();
+                    AmandsControllerPlugin.AmandsControllerClassComponent.currentScrollRectNoDrag = __instance;
+                    AmandsControllerPlugin.AmandsControllerClassComponent.currentScrollRectNoDragRectTransform = rectTransform;
+                }
                 AmandsControllerPlugin.AmandsControllerClassComponent.scrollRectNoDrags.Add(__instance);
             }
         }
@@ -672,6 +675,7 @@ namespace AmandsController
     }
     public class SimpleStashPanelShowPatch : ModulePatch
     {
+        public static bool Searching = false;
         protected override MethodBase GetTargetMethod()
         {
             return typeof(SimpleStashPanel).GetMethod("Show", BindingFlags.Instance | BindingFlags.Public);
@@ -679,14 +683,30 @@ namespace AmandsController
         [PatchPostfix]
         private static void PatchPostFix(ref SimpleStashPanel __instance)
         {
-            ScrollRect scrollRect = Traverse.Create(__instance).Field("_stashScroll").GetValue<ScrollRect>();
-            if (scrollRect != null)
+            if (!Searching) ShowAsync(__instance);
+        }
+        private async static void ShowAsync(SimpleStashPanel instance)
+        {
+            Searching = true;
+            await Task.Delay(100);
+            SearchableItemView searchableItemView = Traverse.Create(instance).Field("_simplePanel").GetValue<SearchableItemView>();
+            if (searchableItemView != null)
             {
-                GridViewMagnifier gridViewMagnifier = scrollRect.gameObject.GetComponent<GridViewMagnifier>();
-                if (gridViewMagnifier != null)
+                GeneratedGridsView generatedGridsView = Traverse.Create(searchableItemView).Field("containedGridsView_0").GetValue<GeneratedGridsView>();
+                if (generatedGridsView != null)
                 {
-                    GridView gridView = Traverse.Create(gridViewMagnifier).Field("_gridView").GetValue<GridView>();
-                    AmandsControllerPlugin.AmandsControllerClassComponent.SimpleStashGridView = gridView;
+                    if (generatedGridsView.GridViews.Count() == 0)
+                    {
+                        ShowAsync(instance);
+                        return;
+                    }
+                    GridView gridView = generatedGridsView.GridViews[0];
+                    if (gridView != null)
+                    {
+                        Searching = false;
+                        AmandsControllerPlugin.AmandsControllerClassComponent.SimpleStashGridView = gridView;
+                        AmandsControllerPlugin.AmandsControllerClassComponent.ControllerUISelect(gridView);
+                    }
                 }
             }
         }
@@ -700,15 +720,20 @@ namespace AmandsController
         [PatchPostfix]
         private static void PatchPostFix(ref SimpleContextMenuButton __instance)
         {
-            AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("Show SimpleContextMenuButton");
             if (AmandsControllerPlugin.AmandsControllerClassComponent.simpleContextMenuButtons.Contains(__instance)) return;
             AmandsControllerPlugin.AmandsControllerClassComponent.simpleContextMenuButtons.Add(__instance);
             if (!AmandsControllerPlugin.AmandsControllerClassComponent.ContextMenu)
             {
                 AmandsControllerPlugin.AmandsControllerClassComponent.UpdateContextMenuBinds(true);
-                AmandsControllerPlugin.AmandsControllerClassComponent.ControllerUIMove(Vector2Int.zero, false);
+                AmandsControllerPlugin.AmandsControllerClassComponent.ControllerUISelect(__instance);
+                //ControllerUIMoveAsync(__instance);
             }
         }
+        /*private async static void ControllerUIMoveAsync(SimpleContextMenuButton instance)
+        {
+            await Task.Delay(100);
+            AmandsControllerPlugin.AmandsControllerClassComponent.ControllerUISelect(instance);
+        }*/
     }
     public class SimpleContextMenuButtonClosePatch : ModulePatch
     {
@@ -719,14 +744,97 @@ namespace AmandsController
         [PatchPostfix]
         private static void PatchPostFix(ref SimpleContextMenuButton __instance)
         {
-            if (__instance == null) return;
-            AmandsControllerPlugin.AmandsControllerClassComponent.DebugStuff("Close SimpleContextMenuButton");
+            if (__instance == null)
+            {
+                goto Skip;
+            }
             AmandsControllerPlugin.AmandsControllerClassComponent.simpleContextMenuButtons.Remove(__instance);
+            Skip:
             if (AmandsControllerPlugin.AmandsControllerClassComponent.simpleContextMenuButtons.Count == 0)
             {
                 AmandsControllerPlugin.AmandsControllerClassComponent.UpdateContextMenuBinds(false);
-                AmandsControllerPlugin.AmandsControllerClassComponent.UpdateGlobalPosition();
             }
+        }
+    }
+    public class SplitDialogShowPatch : ModulePatch
+    {
+        protected override MethodBase GetTargetMethod()
+        {
+            return typeof(SplitDialog).GetMethods().First(x => x.Name == "Show" && x.GetParameters().Count() > 7);
+        }
+        [PatchPostfix]
+        private static void PatchPostFix(ref SplitDialog __instance)
+        {
+            AmandsControllerPlugin.AmandsControllerClassComponent.splitDialog = __instance;
+            AmandsControllerPlugin.AmandsControllerClassComponent.UpdateSplitDialogBinds(true);
+        }
+    }
+    public class SplitDialogHidePatch : ModulePatch
+    {
+        protected override MethodBase GetTargetMethod()
+        {
+            return typeof(SplitDialog).GetMethod("Hide", BindingFlags.Instance | BindingFlags.Public);
+        }
+        [PatchPostfix]
+        private static void PatchPostFix(ref SplitDialog __instance)
+        {
+            AmandsControllerPlugin.AmandsControllerClassComponent.splitDialog = null;
+            AmandsControllerPlugin.AmandsControllerClassComponent.UpdateSplitDialogBinds(false);
+        }
+    }
+    public class SearchableSlotViewShowPatch : ModulePatch
+    {
+        protected override MethodBase GetTargetMethod()
+        {
+            return typeof(SearchableSlotView).GetMethod("Show", BindingFlags.Instance | BindingFlags.Public);
+        }
+        [PatchPostfix]
+        private static void PatchPostFix(ref SearchableSlotView __instance)
+        {
+            if (__instance.Slot != null && __instance.Slot.IsSpecial)
+            {
+                AmandsControllerPlugin.AmandsControllerClassComponent.specialSlotSlotViews.Add(__instance);
+            }
+        }
+    }
+    public class SearchableSlotViewHidePatch : ModulePatch
+    {
+        protected override MethodBase GetTargetMethod()
+        {
+            return typeof(SearchableSlotView).GetMethod("Close", BindingFlags.Instance | BindingFlags.Public);
+        }
+        [PatchPostfix]
+        private static void PatchPostFix(ref SearchableSlotView __instance)
+        {
+            if (__instance == null) return;
+            if (__instance.Slot != null && __instance.Slot.IsSpecial)
+            {
+                AmandsControllerPlugin.AmandsControllerClassComponent.specialSlotSlotViews.Remove(__instance);
+            }
+
+        }
+    }
+    public class InputGetKeyDownLeftControlPatch : ModulePatch
+    {
+        MethodInfo methodInfo;
+        public InputGetKeyDownLeftControlPatch()
+        {
+            methodInfo = typeof(Input).GetMethods().First(x => x.Name == "GetKey" && x.GetParamsNames().Contains("key"));
+        }
+        protected override MethodBase GetTargetMethod()
+        {
+            return methodInfo;
+        }
+        [PatchPrefix]
+        private static bool PatchPreFix(ref bool __result, KeyCode key)
+        {
+            switch (key)
+            {
+                case KeyCode.LeftControl:
+                    __result = true;
+                    return false;
+            }
+            return true;
         }
     }
 }
