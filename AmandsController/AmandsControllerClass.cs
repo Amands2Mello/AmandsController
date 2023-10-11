@@ -23,6 +23,10 @@ using Cutscene;
 using Diz.Binding;
 using System.Linq;
 using EFT.Hideout;
+using Aki.Common.Utils;
+using System.IO;
+using Newtonsoft.Json;
+using UnityEngine.Networking;
 
 namespace AmandsController
 {
@@ -144,6 +148,8 @@ namespace AmandsController
 
         // Controller UI
 
+        public EAmandsControllerCurrentUI CurrentUI = EAmandsControllerCurrentUI.None;
+
         public List<GridView> gridViews = new List<GridView>(); // GridViews
         public GridView SimpleStashGridView;
         public TradingTableGridView tradingTableGridView; // Trading
@@ -202,6 +208,7 @@ namespace AmandsController
 
 
         public Vector2 globalPosition = Vector2.zero;
+        public Vector2 globalSize = Vector2.zero;
         public Vector2 tglobalPosition = Vector2.zero;
         public Vector2Int gridViewLocation = Vector2Int.one;
         public Vector2Int SnapshotGridViewLocation = Vector2Int.one;
@@ -265,7 +272,8 @@ namespace AmandsController
 
         public int lastIntSliderValue;
 
-        public bool InRaidOnly = true;
+        //public bool InRaidOnly = true;
+        public bool InRaid = false;
 
         public MethodInfo CalculateRotatedSize;
 
@@ -279,6 +287,22 @@ namespace AmandsController
         public bool QuickSkipStick = false;
 
         public MethodInfo DraggedItemViewMethod_2;
+
+        public ControllerPresetJsonClass controllerPresetJsonClass;
+
+        public static Dictionary<string, Sprite> LoadedSprites = new Dictionary<string, Sprite>();
+        public static Dictionary<string, AudioClip> LoadedAudioClips = new Dictionary<string, AudioClip>();
+
+        public GameObject SelectedGameObject;
+        public RectTransform SelectedRectTransform;
+        public Image SelectedImage;
+        public LayoutElement SelectedLayoutElement;
+
+        public InventoryScreen inventoryScreen;
+
+        public bool DebugGlobalPosition = false;
+
+        public Image SearchButtonImage;
 
         public void OnGUI()
         {
@@ -310,7 +334,7 @@ namespace AmandsController
             GUILayout.EndArea();
 
             GUIContent gUIContent = new GUIContent();
-            if (Interface && currentSimpleContextMenuButton == null)
+            if (DebugGlobalPosition && InRaid && Interface && currentSimpleContextMenuButton == null)
             {
                 GUI.Box(new Rect(new Vector2(globalPosition.x - (GridSize / 2), (Screen.height) - globalPosition.y - (GridSize / 2)), new Vector2(GridSize, GridSize)), gUIContent);
                 //GUI.Box(new Rect(new Vector2(debugglobalPosition.x, (Screen.height) - debugglobalPosition.y), new Vector2(GridSize, GridSize)), gUIContent);
@@ -646,6 +670,15 @@ namespace AmandsController
         }
         public void Start()
         {
+            if (!File.Exists((AppDomain.CurrentDomain.BaseDirectory + "/BepInEx/plugins/Controller/Default.json")))
+            {
+                DefaultJSON();
+            }
+            if (File.Exists((AppDomain.CurrentDomain.BaseDirectory + "/BepInEx/plugins/Controller/Default.json")))
+            {
+                controllerPresetJsonClass = ReadFromJsonFile<ControllerPresetJsonClass>((AppDomain.CurrentDomain.BaseDirectory + "/BepInEx/plugins/Controller/Default.json"));
+            }
+
             ItemUIContextMethod_0 = typeof(ItemUiContext).GetMethod("method_0", BindingFlags.Instance | BindingFlags.NonPublic);
             TranslateInput = typeof(InputTree).GetMethod("TranslateInput", BindingFlags.Instance | BindingFlags.NonPublic);
             Press = typeof(Button).GetMethod("Press", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -658,23 +691,29 @@ namespace AmandsController
             DraggedItemViewMethod_2 = typeof(DraggedItemView).GetMethod("method_2", BindingFlags.Instance | BindingFlags.NonPublic);
 
             AimAnimationCurve.keys = AimKeys;
+
         }
         public void Update()
         {
             if (Input.GetKeyDown(KeyCode.PageUp))
             {
-                InRaidOnly = false;
+                DebugGlobalPosition = true;
+                /*InRaidOnly = false;
                 UpdateController(null);
-                UpdateInterfaceBinds(true);
+                UpdateInterfaceBinds(true);*/
             }
             if (Input.GetKeyDown(KeyCode.PageDown))
             {
-                InRaidOnly = true;
-                connected = false;
+                DebugGlobalPosition = false;
+                /*InRaidOnly = true;
+                connected = false;*/
             }
+
             if (!connected) return;
 
-            if (localPlayer == null && InRaidOnly) return;
+            InRaid = localPlayer != null;
+
+            if (!InRaid) return;
 
             gamepad = controller.GetState().Gamepad;
 
@@ -1572,6 +1611,26 @@ namespace AmandsController
                     break;
             }
 
+            if (Player != null)
+            {
+                localPlayer = Player;
+                //movementContext = localPlayer.MovementContext;
+                MovementContextObject = Traverse.Create(localPlayer).Property("MovementContext").GetValue<object>();
+                MovementContextType = MovementContextObject.GetType();
+                SetCharacterMovementSpeed = MovementContextType.GetMethod("SetCharacterMovementSpeed", BindingFlags.Instance | BindingFlags.Public);
+            }
+
+            ReloadFiles();
+
+            if (controllerPresetJsonClass != null && controllerPresetJsonClass.AmandsControllerButtonBinds != null && controllerPresetJsonClass.AmandsControllerSets != null)
+            {
+                AmandsControllerSets.Clear();
+                AmandsControllerButtonBinds.Clear();
+                AmandsControllerSets = new Dictionary<string, Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>>(controllerPresetJsonClass.AmandsControllerSets);
+                AmandsControllerButtonBinds = new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>(controllerPresetJsonClass.AmandsControllerButtonBinds);
+                return;
+            }
+
             AmandsControllerSets.Clear();
             AmandsControllerSets.Add("LB", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
             AmandsControllerSets["LB"].Add(EAmandsControllerButton.UP, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ThrowGrenade), EAmandsControllerPressType.Press, 2) });
@@ -1602,8 +1661,8 @@ namespace AmandsController
             AmandsControllerSets["RB"][EAmandsControllerButton.X].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.CheckChamber), EAmandsControllerPressType.Hold, 1));
             AmandsControllerSets["RB"][EAmandsControllerButton.X].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.UnloadMagazine), EAmandsControllerPressType.DoubleClick, 1));
 
-            AmandsControllerSets["RB"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.EnableSet, "Movement"), EAmandsControllerPressType.Press, 100) });
-            AmandsControllerSets["RB"][EAmandsControllerButton.B].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.DisableSet, "Movement"), EAmandsControllerPressType.Release, 100));
+            AmandsControllerSets["RB"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.EnableSet, "Movement"), EAmandsControllerPressType.Press, 1) });
+            AmandsControllerSets["RB"][EAmandsControllerButton.B].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.DisableSet, "Movement"), EAmandsControllerPressType.Release, 1));
 
             AmandsControllerSets["RB"].Add(EAmandsControllerButton.Y, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.FoldStock), EAmandsControllerPressType.Press, 1) });
             AmandsControllerSets["RB"][EAmandsControllerButton.Y].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.CheckChamber), EAmandsControllerPressType.Hold, 1));
@@ -1692,10 +1751,10 @@ namespace AmandsController
             AmandsControllerSets["Interface"][EAmandsControllerButton.LB].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.DisableSet, "Interface_LB"), EAmandsControllerPressType.Release, 20));
 
             AmandsControllerSets.Add("OnDrag", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
-            AmandsControllerSets["OnDrag"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.EndDrag), EAmandsControllerPressType.Press, 22) });
-            AmandsControllerSets["OnDrag"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.CancelDrag), EAmandsControllerPressType.Press, 22) });
-            AmandsControllerSets["OnDrag"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.RotateDragged), EAmandsControllerPressType.Press, 22) });
-            AmandsControllerSets["OnDrag"].Add(EAmandsControllerButton.Y, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.SplitDragged), EAmandsControllerPressType.Press, 22) });
+            AmandsControllerSets["OnDrag"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.EndDrag), EAmandsControllerPressType.Press, 23) });
+            AmandsControllerSets["OnDrag"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.CancelDrag), EAmandsControllerPressType.Press, 23) });
+            AmandsControllerSets["OnDrag"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.RotateDragged), EAmandsControllerPressType.Press, 23) });
+            AmandsControllerSets["OnDrag"].Add(EAmandsControllerButton.Y, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.SplitDragged), EAmandsControllerPressType.Press, 23) });
 
             AmandsControllerSets.Add("Interface_LB", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
             AmandsControllerSets["Interface_LB"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.InterfaceBind4), EAmandsControllerPressType.Press, 21) });
@@ -1709,7 +1768,7 @@ namespace AmandsController
             AmandsControllerSets["Interface_LB_RB"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.InterfaceBind10), EAmandsControllerPressType.Press, 22) });
 
             AmandsControllerSets.Add("SearchButton", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
-            AmandsControllerSets["SearchButton"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.Search), EAmandsControllerPressType.Press, 23) });
+            AmandsControllerSets["SearchButton"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.Search), EAmandsControllerPressType.Press, 24) });
 
             AmandsControllerSets.Add("ContextMenu", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
             AmandsControllerSets["ContextMenu"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.ContextMenuUse), EAmandsControllerPressType.Press, 30) });
@@ -1755,15 +1814,201 @@ namespace AmandsController
             AmandsControllerButtonBinds[EAmandsControllerButton.LEFT].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ChangeScope), EAmandsControllerPressType.Hold, -1));
             AmandsControllerButtonBinds.Add(EAmandsControllerButton.RIGHT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ChangeScope), EAmandsControllerPressType.Press, -1) });
             AmandsControllerButtonBinds.Add(EAmandsControllerButton.BACK, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ToggleInventory), EAmandsControllerPressType.Press, -1) });
-            
-            if (Player != null)
-            {
-                localPlayer = Player;
-                //movementContext = localPlayer.MovementContext;
-                MovementContextObject = Traverse.Create(localPlayer).Property("MovementContext").GetValue<object>();
-                MovementContextType = MovementContextObject.GetType();
-                SetCharacterMovementSpeed = MovementContextType.GetMethod("SetCharacterMovementSpeed", BindingFlags.Instance | BindingFlags.Public);
-            }
+        }
+        public void DefaultJSON()
+        {
+            Dictionary<string, Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>> AmandsControllerSets = new Dictionary<string, Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>>();
+            Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>> AmandsControllerButtonBinds = new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>();
+
+            AmandsControllerSets.Clear();
+            AmandsControllerSets.Add("LB", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
+            AmandsControllerSets["LB"].Add(EAmandsControllerButton.UP, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ThrowGrenade), EAmandsControllerPressType.Press, 2) });
+            AmandsControllerSets["LB"].Add(EAmandsControllerButton.DOWN, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.SelectSecondaryWeapon), EAmandsControllerPressType.Press, 2) });
+            AmandsControllerSets["LB"][EAmandsControllerButton.DOWN].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.SelectSecondaryWeapon), EAmandsControllerPressType.DoubleClick, 2));
+            AmandsControllerSets["LB"].Add(EAmandsControllerButton.LEFT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.SelectSecondPrimaryWeapon), EAmandsControllerPressType.Press, 2) });
+            AmandsControllerSets["LB"].Add(EAmandsControllerButton.RIGHT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.SelectFirstPrimaryWeapon), EAmandsControllerPressType.Press, 2) });
+
+            /*AmandsControllerSets["LB"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.PressSlot4), EAmandsControllerPressType.Press, 2) });
+            AmandsControllerSets["LB"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.PressSlot5), EAmandsControllerPressType.Press, 2) });
+            AmandsControllerSets["LB"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.PressSlot6), EAmandsControllerPressType.Press, 2) });
+            AmandsControllerSets["LB"].Add(EAmandsControllerButton.Y, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.PressSlot7), EAmandsControllerPressType.Press, 2) });*/
+
+            AmandsControllerSets["LB"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.PressSlot4), new AmandsControllerCommand(EAmandsControllerCommand.EnableSet, "HealingLimbSelector") }, EAmandsControllerPressType.Press, 2) });
+            AmandsControllerSets["LB"][EAmandsControllerButton.A].Add(new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.SelectFastSlot4), new AmandsControllerCommand(EAmandsControllerCommand.DisableSet, "HealingLimbSelector") }, EAmandsControllerPressType.Release, 2));
+            AmandsControllerSets["LB"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.PressSlot5), new AmandsControllerCommand(EAmandsControllerCommand.EnableSet, "HealingLimbSelector") }, EAmandsControllerPressType.Press, 2) });
+            AmandsControllerSets["LB"][EAmandsControllerButton.B].Add(new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.SelectFastSlot5), new AmandsControllerCommand(EAmandsControllerCommand.DisableSet, "HealingLimbSelector") }, EAmandsControllerPressType.Release, 2));
+            AmandsControllerSets["LB"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.PressSlot6), new AmandsControllerCommand(EAmandsControllerCommand.EnableSet, "HealingLimbSelector") }, EAmandsControllerPressType.Press, 2) });
+            AmandsControllerSets["LB"][EAmandsControllerButton.X].Add(new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.SelectFastSlot6), new AmandsControllerCommand(EAmandsControllerCommand.DisableSet, "HealingLimbSelector") }, EAmandsControllerPressType.Release, 2));
+            AmandsControllerSets["LB"].Add(EAmandsControllerButton.Y, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.PressSlot7), new AmandsControllerCommand(EAmandsControllerCommand.EnableSet, "HealingLimbSelector") }, EAmandsControllerPressType.Press, 2) });
+            AmandsControllerSets["LB"][EAmandsControllerButton.Y].Add(new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.SelectFastSlot7), new AmandsControllerCommand(EAmandsControllerCommand.DisableSet, "HealingLimbSelector") }, EAmandsControllerPressType.Release, 2));
+
+            AmandsControllerSets["LB"].Add(EAmandsControllerButton.LS, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.DropBackpack), EAmandsControllerPressType.Press, 2) });
+            AmandsControllerSets["LB"].Add(EAmandsControllerButton.BACK, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ToggleGoggles), EAmandsControllerPressType.Press, 2) });
+
+            AmandsControllerSets.Add("RB", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
+            AmandsControllerSets["RB"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ChamberUnload), EAmandsControllerPressType.Press, 1) });
+            AmandsControllerSets["RB"][EAmandsControllerButton.X].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.CheckChamber), EAmandsControllerPressType.Hold, 1));
+            AmandsControllerSets["RB"][EAmandsControllerButton.X].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.UnloadMagazine), EAmandsControllerPressType.DoubleClick, 1));
+
+            AmandsControllerSets["RB"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.EnableSet, "Movement"), EAmandsControllerPressType.Press, 1) });
+            AmandsControllerSets["RB"][EAmandsControllerButton.B].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.DisableSet, "Movement"), EAmandsControllerPressType.Release, 1));
+
+            AmandsControllerSets["RB"].Add(EAmandsControllerButton.Y, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.FoldStock), EAmandsControllerPressType.Press, 1) });
+            AmandsControllerSets["RB"][EAmandsControllerButton.Y].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.CheckChamber), EAmandsControllerPressType.Hold, 1));
+
+            AmandsControllerSets["RB"].Add(EAmandsControllerButton.LEFT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ToggleLeanLeft), EAmandsControllerPressType.Press, 1) });
+            AmandsControllerSets["RB"].Add(EAmandsControllerButton.RIGHT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ToggleLeanRight), EAmandsControllerPressType.Press, 1) });
+
+            AmandsControllerSets["RB"].Add(EAmandsControllerButton.BACK, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.SwitchHeadLight), EAmandsControllerPressType.Press, 1) });
+            AmandsControllerSets["RB"][EAmandsControllerButton.BACK].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ToggleHeadLight), EAmandsControllerPressType.Hold, 1));
+
+            AmandsControllerSets.Add("LB_RB", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
+            AmandsControllerSets["LB_RB"].Add(EAmandsControllerButton.UP, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ToggleBlindAbove), EAmandsControllerPressType.Press, 3) });
+            AmandsControllerSets["LB_RB"][EAmandsControllerButton.UP].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.BlindShootEnd), EAmandsControllerPressType.Release, 3));
+            AmandsControllerSets["LB_RB"].Add(EAmandsControllerButton.DOWN, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ToggleBlindRight), EAmandsControllerPressType.Press, 3) });
+            AmandsControllerSets["LB_RB"][EAmandsControllerButton.DOWN].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.BlindShootEnd), EAmandsControllerPressType.Release, 3));
+            AmandsControllerSets["LB_RB"].Add(EAmandsControllerButton.LEFT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ToggleStepLeft), EAmandsControllerPressType.Press, 3) });
+            AmandsControllerSets["LB_RB"][EAmandsControllerButton.LEFT].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ReturnFromLeftStep), EAmandsControllerPressType.Release, 3));
+            AmandsControllerSets["LB_RB"].Add(EAmandsControllerButton.RIGHT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ToggleStepRight), EAmandsControllerPressType.Press, 3) });
+            AmandsControllerSets["LB_RB"][EAmandsControllerButton.RIGHT].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ReturnFromRightStep), EAmandsControllerPressType.Release, 3));
+
+            /*AmandsControllerSets["LB_RB"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.PressSlot8), EAmandsControllerPressType.Press, 2) });
+            AmandsControllerSets["LB_RB"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.PressSlot9), EAmandsControllerPressType.Press, 2) });
+            AmandsControllerSets["LB_RB"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.PressSlot0), EAmandsControllerPressType.Press, 2) });*/
+
+            AmandsControllerSets["LB_RB"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.PressSlot8), new AmandsControllerCommand(EAmandsControllerCommand.EnableSet, "HealingLimbSelector") }, EAmandsControllerPressType.Press, 3) });
+            AmandsControllerSets["LB_RB"][EAmandsControllerButton.A].Add(new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.SelectFastSlot8), new AmandsControllerCommand(EAmandsControllerCommand.DisableSet, "HealingLimbSelector") }, EAmandsControllerPressType.Release, 3));
+            AmandsControllerSets["LB_RB"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.PressSlot9), new AmandsControllerCommand(EAmandsControllerCommand.EnableSet, "HealingLimbSelector") }, EAmandsControllerPressType.Press, 3) });
+            AmandsControllerSets["LB_RB"][EAmandsControllerButton.B].Add(new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.SelectFastSlot9), new AmandsControllerCommand(EAmandsControllerCommand.DisableSet, "HealingLimbSelector") }, EAmandsControllerPressType.Release, 3));
+            AmandsControllerSets["LB_RB"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.PressSlot0), new AmandsControllerCommand(EAmandsControllerCommand.EnableSet, "HealingLimbSelector") }, EAmandsControllerPressType.Press, 3) });
+            AmandsControllerSets["LB_RB"][EAmandsControllerButton.X].Add(new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.SelectFastSlot0), new AmandsControllerCommand(EAmandsControllerCommand.DisableSet, "HealingLimbSelector") }, EAmandsControllerPressType.Release, 3));
+            AmandsControllerSets["LB_RB"].Add(EAmandsControllerButton.Y, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.DisplayTimer), EAmandsControllerPressType.Press, 3) });
+            AmandsControllerSets["LB_RB"][EAmandsControllerButton.Y].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.DisplayTimerAndExits), EAmandsControllerPressType.DoubleClick, 3));
+
+            AmandsControllerSets.Add("ActionPanel", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
+            AmandsControllerSets["ActionPanel"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.BeginInteracting), EAmandsControllerPressType.Press, 10) });
+            AmandsControllerSets["ActionPanel"][EAmandsControllerButton.X].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.EndInteracting), EAmandsControllerPressType.Release, 10));
+            AmandsControllerSets["ActionPanel"].Add(EAmandsControllerButton.UP, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ScrollPrevious), EAmandsControllerPressType.Press, 10) });
+            AmandsControllerSets["ActionPanel"].Add(EAmandsControllerButton.DOWN, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ScrollNext), EAmandsControllerPressType.Press, 10) });
+
+            AmandsControllerSets.Add("HealingLimbSelector", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
+            AmandsControllerSets["HealingLimbSelector"].Add(EAmandsControllerButton.UP, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ScrollNext), EAmandsControllerPressType.Press, 11) });
+            AmandsControllerSets["HealingLimbSelector"].Add(EAmandsControllerButton.DOWN, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ScrollPrevious), EAmandsControllerPressType.Press, 11) });
+
+            AmandsControllerSets.Add("Movement", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
+            AmandsControllerSets["Movement"].Add(EAmandsControllerButton.LSLEFT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.SlowLeanLeft), EAmandsControllerPressType.Press, 3) });
+            AmandsControllerSets["Movement"][EAmandsControllerButton.LSLEFT].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.EndSlowLean), EAmandsControllerPressType.Release, 3));
+            AmandsControllerSets["Movement"].Add(EAmandsControllerButton.LSRIGHT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.SlowLeanRight), EAmandsControllerPressType.Press, 3) });
+            AmandsControllerSets["Movement"][EAmandsControllerButton.LSRIGHT].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.EndSlowLean), EAmandsControllerPressType.Release, 3));
+            /*AmandsControllerSets["Movement"].Add(EAmandsControllerButton.UP, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand> { ECommand.NextWalkPose }, EAmandsControllerCommand.InputTree, EAmandsControllerPressType.Press, 3, "") });
+            AmandsControllerSets["Movement"].Add(EAmandsControllerButton.DOWN, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand> { ECommand.PreviousWalkPose }, EAmandsControllerCommand.InputTree, EAmandsControllerPressType.Press, 3, "") });
+            AmandsControllerSets["Movement"].Add(EAmandsControllerButton.LEFT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.SlowLeanLeft, EAmandsControllerPressType.Press, 3, "") });
+            AmandsControllerSets["Movement"][EAmandsControllerButton.LEFT].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.None }, EAmandsControllerCommand.EndSlowLean, EAmandsControllerPressType.Release, 3, ""));
+            AmandsControllerSets["Movement"].Add(EAmandsControllerButton.RIGHT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.SlowLeanRight, EAmandsControllerPressType.Press, 3, "") });
+            AmandsControllerSets["Movement"][EAmandsControllerButton.RIGHT].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.None }, EAmandsControllerCommand.EndSlowLean, EAmandsControllerPressType.Release, 3, ""));
+            AmandsControllerSets["Movement"].Add(EAmandsControllerButton.LeftThumb, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.RestoreLean, EAmandsControllerPressType.Press, 3, "") });*/
+
+            AmandsControllerSets.Add("Aiming", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
+            AmandsControllerSets["Aiming"].Add(EAmandsControllerButton.RS, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ToggleBreathing), EAmandsControllerPressType.Press, 4) });
+            AmandsControllerSets["Aiming"].Add(EAmandsControllerButton.RB, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.EnableSet, "Aiming_RB"), EAmandsControllerPressType.Press, 4) });
+            AmandsControllerSets["Aiming"][EAmandsControllerButton.RB].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.DisableSet, "Aiming_RB"), EAmandsControllerPressType.Release, 4));
+
+            AmandsControllerSets.Add("Aiming_RB", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
+            AmandsControllerSets["Aiming_RB"].Add(EAmandsControllerButton.UP, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.OpticCalibrationSwitchUp), EAmandsControllerPressType.Press, 4) });
+            AmandsControllerSets["Aiming_RB"].Add(EAmandsControllerButton.DOWN, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.OpticCalibrationSwitchDown), EAmandsControllerPressType.Press, 4) });
+
+            AmandsControllerSets.Add("Interface", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
+            AmandsControllerSets["Interface"].Add(EAmandsControllerButton.UP, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.InterfaceUp), EAmandsControllerPressType.Press, 20) });
+            AmandsControllerSets["Interface"][EAmandsControllerButton.UP].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.InterfaceDisableAutoMove), EAmandsControllerPressType.Release, 20));
+            AmandsControllerSets["Interface"].Add(EAmandsControllerButton.DOWN, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.InterfaceDown), EAmandsControllerPressType.Press, 20) });
+            AmandsControllerSets["Interface"][EAmandsControllerButton.DOWN].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.InterfaceDisableAutoMove), EAmandsControllerPressType.Release, 20));
+            AmandsControllerSets["Interface"].Add(EAmandsControllerButton.LEFT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.InterfaceLeft), EAmandsControllerPressType.Press, 20) });
+            AmandsControllerSets["Interface"][EAmandsControllerButton.LEFT].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.InterfaceDisableAutoMove), EAmandsControllerPressType.Release, 20));
+            AmandsControllerSets["Interface"].Add(EAmandsControllerButton.RIGHT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.InterfaceRight), EAmandsControllerPressType.Press, 20) });
+            AmandsControllerSets["Interface"][EAmandsControllerButton.RIGHT].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.InterfaceDisableAutoMove), EAmandsControllerPressType.Release, 20));
+
+            AmandsControllerSets["Interface"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.BeginDrag), EAmandsControllerPressType.Press, 20) });
+            AmandsControllerSets["Interface"][EAmandsControllerButton.A].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.ShowContextMenu), EAmandsControllerPressType.Hold, 20));
+            AmandsControllerSets["Interface"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.Escape), EAmandsControllerPressType.Press, 20) });
+            AmandsControllerSets["Interface"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.Use), EAmandsControllerPressType.Press, 20) });
+            AmandsControllerSets["Interface"][EAmandsControllerButton.X].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.UseHold), EAmandsControllerPressType.Hold, 20));
+            AmandsControllerSets["Interface"].Add(EAmandsControllerButton.Y, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.QuickMove), EAmandsControllerPressType.Press, 20) });
+
+            AmandsControllerSets["Interface"].Add(EAmandsControllerButton.RS, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.Discard), EAmandsControllerPressType.Press, 20) });
+
+            AmandsControllerSets["Interface"].Add(EAmandsControllerButton.LB, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.EnableSet, "Interface_LB"), EAmandsControllerPressType.Press, 20) });
+            AmandsControllerSets["Interface"][EAmandsControllerButton.LB].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.DisableSet, "Interface_LB"), EAmandsControllerPressType.Release, 20));
+
+            AmandsControllerSets.Add("OnDrag", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
+            AmandsControllerSets["OnDrag"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.EndDrag), EAmandsControllerPressType.Press, 23) });
+            AmandsControllerSets["OnDrag"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.CancelDrag), EAmandsControllerPressType.Press, 23) });
+            AmandsControllerSets["OnDrag"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.RotateDragged), EAmandsControllerPressType.Press, 23) });
+            AmandsControllerSets["OnDrag"].Add(EAmandsControllerButton.Y, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.SplitDragged), EAmandsControllerPressType.Press, 23) });
+
+            AmandsControllerSets.Add("Interface_LB", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
+            AmandsControllerSets["Interface_LB"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.InterfaceBind4), EAmandsControllerPressType.Press, 21) });
+            AmandsControllerSets["Interface_LB"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.InterfaceBind5), EAmandsControllerPressType.Press, 21) });
+            AmandsControllerSets["Interface_LB"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.InterfaceBind6), EAmandsControllerPressType.Press, 21) });
+            AmandsControllerSets["Interface_LB"].Add(EAmandsControllerButton.Y, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.InterfaceBind7), EAmandsControllerPressType.Press, 21) });
+
+            AmandsControllerSets.Add("Interface_LB_RB", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
+            AmandsControllerSets["Interface_LB_RB"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.InterfaceBind8), EAmandsControllerPressType.Press, 22) });
+            AmandsControllerSets["Interface_LB_RB"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.InterfaceBind9), EAmandsControllerPressType.Press, 22) });
+            AmandsControllerSets["Interface_LB_RB"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.InterfaceBind10), EAmandsControllerPressType.Press, 22) });
+
+            AmandsControllerSets.Add("SearchButton", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
+            AmandsControllerSets["SearchButton"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.Search), EAmandsControllerPressType.Press, 24) });
+
+            AmandsControllerSets.Add("ContextMenu", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
+            AmandsControllerSets["ContextMenu"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.ContextMenuUse), EAmandsControllerPressType.Press, 30) });
+            AmandsControllerSets["ContextMenu"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.None), EAmandsControllerPressType.Press, 30) });
+            AmandsControllerSets["ContextMenu"].Add(EAmandsControllerButton.Y, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.None), EAmandsControllerPressType.Press, 30) });
+            AmandsControllerSets["ContextMenu"].Add(EAmandsControllerButton.RS, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.None), EAmandsControllerPressType.Press, 30) });
+
+            AmandsControllerSets.Add("SplitDialog", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
+            AmandsControllerSets["SplitDialog"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.SplitDialogAccept), EAmandsControllerPressType.Press, 50) });
+            AmandsControllerSets["SplitDialog"].Add(EAmandsControllerButton.UP, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.SplitDialogAdd), EAmandsControllerPressType.Press, 50) });
+            AmandsControllerSets["SplitDialog"][EAmandsControllerButton.UP].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.SplitDialogDisableAutoMove), EAmandsControllerPressType.Release, 50));
+            AmandsControllerSets["SplitDialog"].Add(EAmandsControllerButton.DOWN, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.SplitDialogSubtract), EAmandsControllerPressType.Press, 50) });
+            AmandsControllerSets["SplitDialog"][EAmandsControllerButton.DOWN].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.SplitDialogDisableAutoMove), EAmandsControllerPressType.Release, 50));
+            AmandsControllerSets["SplitDialog"].Add(EAmandsControllerButton.LEFT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.SplitDialogSubtract), EAmandsControllerPressType.Press, 50) });
+            AmandsControllerSets["SplitDialog"][EAmandsControllerButton.LEFT].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.SplitDialogDisableAutoMove), EAmandsControllerPressType.Release, 50));
+            AmandsControllerSets["SplitDialog"].Add(EAmandsControllerButton.RIGHT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.SplitDialogAdd), EAmandsControllerPressType.Press, 50) });
+            AmandsControllerSets["SplitDialog"][EAmandsControllerButton.RIGHT].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.SplitDialogDisableAutoMove), EAmandsControllerPressType.Release, 50));
+
+            AmandsControllerButtonBinds.Clear();
+            AmandsControllerButtonBinds.Add(EAmandsControllerButton.LT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.ToggleAlternativeShooting), new AmandsControllerCommand(ECommand.EndSprinting), new AmandsControllerCommand(ECommand.TryLowThrow) }, EAmandsControllerPressType.Press, -1) });
+            AmandsControllerButtonBinds[EAmandsControllerButton.LT].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.FinishLowThrow), EAmandsControllerPressType.Release, -1));
+            AmandsControllerButtonBinds.Add(EAmandsControllerButton.RT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.ToggleShooting), new AmandsControllerCommand(ECommand.EndSprinting), new AmandsControllerCommand(ECommand.TryHighThrow) }, EAmandsControllerPressType.Press, -1) });
+            AmandsControllerButtonBinds[EAmandsControllerButton.RT].Add(new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.EndShooting), new AmandsControllerCommand(ECommand.FinishHighThrow) }, EAmandsControllerPressType.Release, -1));
+
+            AmandsControllerButtonBinds.Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.Jump), EAmandsControllerPressType.Press, -1) });
+            AmandsControllerButtonBinds.Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ToggleDuck), EAmandsControllerPressType.Press, -1) });
+            AmandsControllerButtonBinds[EAmandsControllerButton.B].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ToggleProne), EAmandsControllerPressType.Hold, -1));
+            AmandsControllerButtonBinds.Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ReloadWeapon), EAmandsControllerPressType.Press, -1) });
+            AmandsControllerButtonBinds[EAmandsControllerButton.X].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.CheckAmmo), EAmandsControllerPressType.Hold, -1));
+            AmandsControllerButtonBinds[EAmandsControllerButton.X].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.QuickReloadWeapon), EAmandsControllerPressType.DoubleClick, -1));
+            AmandsControllerButtonBinds.Add(EAmandsControllerButton.Y, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.QuickSelectWeapon), EAmandsControllerPressType.Press, -1) });
+            AmandsControllerButtonBinds[EAmandsControllerButton.Y].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ExamineWeapon), EAmandsControllerPressType.Hold, -1));
+            AmandsControllerButtonBinds.Add(EAmandsControllerButton.LS, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ToggleSprinting), EAmandsControllerPressType.Press, -1) });
+            AmandsControllerButtonBinds.Add(EAmandsControllerButton.RS, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.QuickKnifeKick), EAmandsControllerPressType.Press, -1) });
+            AmandsControllerButtonBinds[EAmandsControllerButton.RS].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.SelectKnife), EAmandsControllerPressType.Hold, -1));
+
+            AmandsControllerButtonBinds.Add(EAmandsControllerButton.UP, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.NextTacticalDevice), EAmandsControllerPressType.Press, -1) });
+            AmandsControllerButtonBinds[EAmandsControllerButton.UP].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ToggleTacticalDevice), EAmandsControllerPressType.Hold, -1));
+            AmandsControllerButtonBinds.Add(EAmandsControllerButton.DOWN, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ChangeWeaponMode), EAmandsControllerPressType.Press, -1) });
+            AmandsControllerButtonBinds[EAmandsControllerButton.DOWN].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.CheckFireMode), EAmandsControllerPressType.Hold, -1));
+            AmandsControllerButtonBinds[EAmandsControllerButton.DOWN].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ForceAutoWeaponMode), EAmandsControllerPressType.DoubleClick, -1));
+            AmandsControllerButtonBinds.Add(EAmandsControllerButton.LEFT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ChangeScopeMagnification), EAmandsControllerPressType.Press, -1) });
+            AmandsControllerButtonBinds[EAmandsControllerButton.LEFT].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ChangeScope), EAmandsControllerPressType.Hold, -1));
+            AmandsControllerButtonBinds.Add(EAmandsControllerButton.RIGHT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ChangeScope), EAmandsControllerPressType.Press, -1) });
+            AmandsControllerButtonBinds.Add(EAmandsControllerButton.BACK, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ToggleInventory), EAmandsControllerPressType.Press, -1) });
+
+            ControllerPresetJsonClass controllerPresetJsonClass = new ControllerPresetJsonClass();
+            controllerPresetJsonClass.AmandsControllerButtonBinds = AmandsControllerButtonBinds;
+            controllerPresetJsonClass.AmandsControllerSets = AmandsControllerSets;
+
+            WriteToJsonFile<ControllerPresetJsonClass>((AppDomain.CurrentDomain.BaseDirectory + "/BepInEx/plugins/Controller/Default.json"), controllerPresetJsonClass, false);
         }
         public void UpdateInterfaceBinds(bool Enabled)
         {
@@ -2329,7 +2574,7 @@ namespace AmandsController
                 ContainedGridsView bestContainedGridsView = null;
                 foreach (ContainedGridsView containedGridsView in containedGridsViews)
                 {
-                    if (containedGridsView == currentContainedGridsView) continue;
+                    if (containedGridsView == null || containedGridsView == currentContainedGridsView) continue;
                     rectTransform = containedGridsView.GetComponent<RectTransform>();
                     position = new Vector2(containedGridsView.transform.position.x, containedGridsView.transform.position.y - (rectTransform.sizeDelta.y * (rectTransform.pivot.y - 1f) * ScreenRatio));
                     if (Position.x > position.x && Position.x < (position.x + (rectTransform.sizeDelta.x * ScreenRatio)) && Position.y < position.y && Position.y > (position.y - (rectTransform.sizeDelta.y * ScreenRatio)))
@@ -2419,7 +2664,7 @@ namespace AmandsController
                 }
                 foreach (ItemSpecificationPanel itemSpecificationPanel in itemSpecificationPanels)
                 {
-                    if (itemSpecificationPanel == currentItemSpecificationPanel) continue;
+                    if (itemSpecificationPanel == null || itemSpecificationPanel == currentItemSpecificationPanel) continue;
                     rectTransform = itemSpecificationPanel.GetComponent<RectTransform>();
                     position = new Vector2(itemSpecificationPanel.transform.position.x - ((rectTransform.sizeDelta.x / 2) * ScreenRatio), itemSpecificationPanel.transform.position.y + ((rectTransform.sizeDelta.y / 2) * ScreenRatio));
                     if (Position.x > position.x && Position.x < (position.x + (rectTransform.sizeDelta.x * ScreenRatio)) && Position.y < position.y && Position.y > (position.y - (rectTransform.sizeDelta.y * ScreenRatio)))
@@ -2783,7 +3028,7 @@ namespace AmandsController
                 }
                 foreach (ContainedGridsView containedGridsView in containedGridsViews)
                 {
-                    if (containedGridsView == currentContainedGridsView) continue;
+                    if (containedGridsView == null || containedGridsView == currentContainedGridsView) continue;
                     rectTransform = containedGridsView.GetComponent<RectTransform>();
                     position = new Vector2(containedGridsView.transform.position.x, containedGridsView.transform.position.y - (rectTransform.sizeDelta.y * (rectTransform.pivot.y - 1f) * ScreenRatio));
                     if (Position.x > position.x && Position.x < (position.x + (rectTransform.sizeDelta.x * ScreenRatio)) && Position.y < position.y && Position.y > (position.y - (rectTransform.sizeDelta.y * ScreenRatio)))
@@ -2874,7 +3119,7 @@ namespace AmandsController
                 }
                 foreach (ItemSpecificationPanel itemSpecificationPanel in itemSpecificationPanels)
                 {
-                    if (itemSpecificationPanel == currentItemSpecificationPanel) continue;
+                    if (itemSpecificationPanel == null || itemSpecificationPanel == currentItemSpecificationPanel) continue;
                     rectTransform = itemSpecificationPanel.GetComponent<RectTransform>();
                     position = new Vector2(itemSpecificationPanel.transform.position.x - ((rectTransform.sizeDelta.x / 2) * ScreenRatio), itemSpecificationPanel.transform.position.y + ((rectTransform.sizeDelta.y / 2) * ScreenRatio));
                     if (Position.x > position.x && Position.x < (position.x + (rectTransform.sizeDelta.x * ScreenRatio)) && Position.y < position.y && Position.y > (position.y - (rectTransform.sizeDelta.y * ScreenRatio)))
@@ -2961,6 +3206,11 @@ namespace AmandsController
             lastDirection = direction;
 
             ActiveAmandsControllerSets.Remove("SearchButton");
+            if (SearchButtonImage != null)
+            {
+                SearchButtonImage.color = Color.white;
+                SearchButtonImage = null;
+            }
 
             ScreenRatio = (Screen.height / 1080f);
             GridSize = 63f * ScreenRatio;
@@ -2998,7 +3248,7 @@ namespace AmandsController
                 UpdateGlobalPosition();
                 foreach (SimpleContextMenuButton simpleContextMenuButton in simpleContextMenuButtons)
                 {
-                    if (simpleContextMenuButton == currentSimpleContextMenuButton) continue;
+                    if (simpleContextMenuButton == null || simpleContextMenuButton == currentSimpleContextMenuButton) continue;
 
                     position.x = simpleContextMenuButton.transform.position.x;
                     position.y = simpleContextMenuButton.transform.position.y;
@@ -3079,7 +3329,7 @@ namespace AmandsController
 
                 foreach (GridView gridView in currentContainedGridsView.GridViews)
                 {
-                    if (gridView == currentGridView) continue;
+                    if (gridView == null || gridView == currentGridView) continue;
 
                     GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
                     GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
@@ -3152,7 +3402,7 @@ namespace AmandsController
 
                 foreach (ModSlotView modSlotView in Traverse.Create(currentItemSpecificationPanel).Field("_modsContainer").GetValue<RectTransform>().GetComponentsInChildren<ModSlotView>())
                 {
-                    if (modSlotView == currentModSlotView) continue;
+                    if (modSlotView == null || modSlotView == currentModSlotView) continue;
 
                     dot = Vector2.Dot((globalPosition - ((Vector2)modSlotView.transform.position)).normalized, -direction);
                     distance = Vector2.Distance(globalPosition, (Vector2)modSlotView.transform.position);
@@ -3203,7 +3453,7 @@ namespace AmandsController
             // GridView Blind Search
             foreach (GridView gridView in gridViews)
             {
-                if (gridView == currentGridView) continue;
+                if (gridView == null || gridView == currentGridView) continue;
 
                 GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
                 GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
@@ -3256,10 +3506,10 @@ namespace AmandsController
             // ContainedGridsView GridView Blind Search
             foreach (ContainedGridsView containedGridsView in containedGridsViews)
             {
-                if (containedGridsView == currentContainedGridsView) continue;
+                if (containedGridsView == null || containedGridsView == currentContainedGridsView) continue;
                 foreach (GridView gridView in containedGridsView.GridViews)
                 {
-                    if (gridView == currentGridView) continue;
+                    if (gridView == null || gridView == currentGridView) continue;
 
                     GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
                     GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
@@ -3351,10 +3601,10 @@ namespace AmandsController
             // ItemSpecificationPanel ModSlotView Blind Search
             foreach (ItemSpecificationPanel itemSpecificationPanel in itemSpecificationPanels)
             {
-                if (itemSpecificationPanel == currentItemSpecificationPanel) continue;
+                if (itemSpecificationPanel == null || itemSpecificationPanel == currentItemSpecificationPanel) continue;
                 foreach (ModSlotView modSlotView in Traverse.Create(itemSpecificationPanel).Field("_modsContainer").GetValue<RectTransform>().GetComponentsInChildren<ModSlotView>())
                 {
-                    if (modSlotView == currentModSlotView) continue;
+                    if (modSlotView == null || modSlotView == currentModSlotView) continue;
 
                     dot = Vector2.Dot((globalPosition - ((Vector2)modSlotView.transform.position)).normalized, -direction);
                     distance = Vector2.Distance(globalPosition, (Vector2)modSlotView.transform.position);
@@ -3382,7 +3632,7 @@ namespace AmandsController
             // SearchButton Blind Search
             foreach (SearchButton searchButton in searchButtons)
             {
-                if (searchButton == currentSearchButton) continue;
+                if (searchButton == null || searchButton == currentSearchButton) continue;
                 Vector2 size = searchButton.GetComponent<RectTransform>().sizeDelta * ScreenRatio;
                 position.x = searchButton.transform.position.x;// - (size.x / 2f);
                 position.y = searchButton.transform.position.y;// - (size.y / 2f);
@@ -3412,7 +3662,7 @@ namespace AmandsController
             // SpecialSlot Blind Search
             foreach (SlotView slotView in specialSlotSlotViews)
             {
-                if (slotView == currentSpecialSlotSlotView) continue;
+                if (slotView == null || slotView == currentSpecialSlotSlotView) continue;
                 position = new Vector2(slotView.transform.position.x + (GridSize / 2f), slotView.transform.position.y - (GridSize / 2f));
                 dot = Vector2.Dot((globalPosition - position).normalized, -direction);
                 distance = Vector2.Distance(globalPosition, position);
@@ -3442,7 +3692,7 @@ namespace AmandsController
             // EquipmentSlotView Blind Search
             foreach (SlotView slotView in equipmentSlotViews)
             {
-                if (slotView == currentEquipmentSlotView) continue;
+                if (slotView == null || slotView == currentEquipmentSlotView) continue;
                 position = new Vector2(slotView.transform.position.x + (SlotSize / 2f), slotView.transform.position.y - (SlotSize / 2f));
                 dot = Vector2.Dot((globalPosition - position).normalized, -direction);
                 distance = Vector2.Distance(globalPosition, position);
@@ -3469,7 +3719,7 @@ namespace AmandsController
             // WeaponsSlotView Blind Search
             foreach (SlotView slotView in weaponsSlotViews)
             {
-                if (slotView == currentWeaponsSlotView) continue;
+                if (slotView == null || slotView == currentWeaponsSlotView) continue;
                 position = new Vector2(slotView.transform.position.x + (157.0811f * ScreenRatio), slotView.transform.position.y - (SlotSize / 2f));
                 dot = Vector2.Dot((globalPosition - position).normalized, -direction);
                 distance = Vector2.Distance(globalPosition, position);
@@ -3522,7 +3772,7 @@ namespace AmandsController
             // ContainersSlotView Blind Search
             foreach (SlotView slotView in containersSlotViews)
             {
-                if (slotView == currentContainersSlotView) continue;
+                if (slotView == null || slotView == currentContainersSlotView) continue;
                 position = new Vector2(slotView.transform.position.x + (SlotSize / 2f), slotView.transform.position.y - (SlotSize / 2f));
                 dot = Vector2.Dot((globalPosition - position).normalized, -direction);
                 distance = Vector2.Distance(globalPosition, position);
@@ -3549,7 +3799,7 @@ namespace AmandsController
             // LootEquipmentSlotView Blind Search
             foreach (SlotView slotView in lootEquipmentSlotViews)
             {
-                if (slotView == currentEquipmentSlotView) continue;
+                if (slotView == null || slotView == currentEquipmentSlotView) continue;
                 position = new Vector2(slotView.transform.position.x + (SlotSize / 2f), slotView.transform.position.y - (SlotSize / 2f));
                 dot = Vector2.Dot((globalPosition - position).normalized, -direction);
                 distance = Vector2.Distance(globalPosition, position);
@@ -3576,7 +3826,7 @@ namespace AmandsController
             // LootWeaponsSlotView Blind Search
             foreach (SlotView slotView in lootWeaponsSlotViews)
             {
-                if (slotView == currentWeaponsSlotView) continue;
+                if (slotView == null || slotView == currentWeaponsSlotView) continue;
                 position = new Vector2(slotView.transform.position.x + (157.0811f * ScreenRatio), slotView.transform.position.y - (SlotSize / 2f));
                 dot = Vector2.Dot((globalPosition - position).normalized, -direction);
                 distance = Vector2.Distance(globalPosition, position);
@@ -3629,7 +3879,7 @@ namespace AmandsController
             // LootContainersSlotView Blind Search
             foreach (SlotView slotView in lootContainersSlotViews)
             {
-                if (slotView == currentContainersSlotView) continue;
+                if (slotView == null || slotView == currentContainersSlotView) continue;
                 position = new Vector2(slotView.transform.position.x + (SlotSize / 2f), slotView.transform.position.y - (SlotSize / 2f));
                 dot = Vector2.Dot((globalPosition - position).normalized, -direction);
                 distance = Vector2.Distance(globalPosition, position);
@@ -3755,6 +4005,20 @@ namespace AmandsController
             currentSpecialSlotSlotView = bestSpecialSlotSlotView;
             currentSearchButton = bestSearchButton;
             gridViewLocation = bestGridViewLocation;
+
+            if (currentSearchButton != null)
+            {
+                if (AmandsControllerSets.ContainsKey("SearchButton") && !ActiveAmandsControllerSets.Contains("SearchButton"))
+                {
+                    ActiveAmandsControllerSets.Add("SearchButton");
+                }
+                SearchButtonImage = currentSearchButton.GetComponent<Image>();
+                if (SearchButtonImage != null)
+                {
+                    SearchButtonImage.color = Color.red;
+                }
+            }
+
             UpdateGlobalPosition();
             FindGridWindow(globalPosition);
             // OnMove
@@ -3762,9 +4026,10 @@ namespace AmandsController
         }
         public void ControllerUIOnMove(Vector2Int direction, Vector2 position)
         {
+            FindScrollRectNoDrang(position);
             AmandsControllerOnPointerMove();
             AmandsControllerOnDrag();
-            FindScrollRectNoDrang(position);
+            UpdateSelector();
         }
         public void ControllerUIMoveSnapshot()
         {
@@ -3802,62 +4067,196 @@ namespace AmandsController
             // OnMove
             ControllerUIOnMove(Vector2Int.zero, globalPosition);
         }
-        public void UpdateGlobalPosition()
+        public EAmandsControllerCurrentUI GetAmandsControllerCurrentUI()
         {
             if (currentSimpleContextMenuButton != null)
             {
-                globalPosition.x = currentSimpleContextMenuButton.transform.position.x;
-                globalPosition.y = currentSimpleContextMenuButton.transform.position.y;
-                return;
+                return EAmandsControllerCurrentUI.ContextMenuButton;
             }
-            if (currentGridView != null)
+            else if (currentGridView != null)
             {
-                globalPosition.x = currentGridView.transform.position.x + (GridSize * gridViewLocation.x) - (GridSize / 2f);
-                globalPosition.y = currentGridView.transform.position.y - (GridSize * gridViewLocation.y) + (GridSize / 2f);
+                return EAmandsControllerCurrentUI.GridView;
             }
             else if (currentTradingTableGridView != null)
             {
-                Vector2 size = currentTradingTableGridView.GetComponent<RectTransform>().sizeDelta * ScreenRatio;
-                globalPosition.x = (currentTradingTableGridView.transform.position.x - (size.x / 2f)) + (GridSize * gridViewLocation.x) - (GridSize / 2f);
-                globalPosition.y = (currentTradingTableGridView.transform.position.y + (size.y / 2f)) - (GridSize * gridViewLocation.y) + (GridSize / 2f);
+                return EAmandsControllerCurrentUI.TradingTableGridView;
             }
             else if (currentModSlotView != null)
             {
-                globalPosition = currentModSlotView.transform.position;
+                return EAmandsControllerCurrentUI.ModSlotView;
             }
             else if (currentEquipmentSlotView != null)
             {
-                globalPosition = new Vector2(currentEquipmentSlotView.transform.position.x + (SlotSize / 2f), currentEquipmentSlotView.transform.position.y - (SlotSize / 2f));
+                return EAmandsControllerCurrentUI.EquipmentSlotView;
             }
             else if (currentWeaponsSlotView != null)
             {
-                globalPosition = new Vector2(currentWeaponsSlotView.transform.position.x + (157.0811f * ScreenRatio), currentWeaponsSlotView.transform.position.y - (SlotSize / 2f));
+                return EAmandsControllerCurrentUI.WeaponsSlotView;
             }
             else if (currentArmbandSlotView != null)
             {
-                globalPosition = new Vector2(currentArmbandSlotView.transform.position.x + (SlotSize / 2f), currentArmbandSlotView.transform.position.y - (32f * ScreenRatio));
+                return EAmandsControllerCurrentUI.ArmbandSlotView;
             }
             else if (currentContainersSlotView != null)
             {
-                globalPosition = new Vector2(currentContainersSlotView.transform.position.x + (SlotSize / 2f), currentContainersSlotView.transform.position.y - (SlotSize / 2f));
+                return EAmandsControllerCurrentUI.ContainersSlotView;
             }
             else if (currentDogtagSlotView != null)
             {
-                globalPosition = new Vector2(currentDogtagSlotView.transform.position.x - GridSize - (GridSize / 2f), currentDogtagSlotView.transform.position.y - (GridSize / 2f));
+                return EAmandsControllerCurrentUI.DogtagSlotView;
             }
             else if (currentSpecialSlotSlotView != null)
             {
-                globalPosition.x = currentSpecialSlotSlotView.transform.position.x + (GridSize / 2f);
-                globalPosition.y = currentSpecialSlotSlotView.transform.position.y - (GridSize / 2f);
+                return EAmandsControllerCurrentUI.SpecialSlotSlotView;
             }
             else if (currentSearchButton != null)
             {
-                Vector2 size = currentSearchButton.GetComponent<RectTransform>().sizeDelta * ScreenRatio;
-                globalPosition.x = currentSearchButton.transform.position.x;// - (size.x / 2f);
-                globalPosition.y = currentSearchButton.transform.position.y;// - (size.y / 2f);
-                if (AmandsControllerSets.ContainsKey("SearchButton") && !ActiveAmandsControllerSets.Contains("SearchButton"))
+                return EAmandsControllerCurrentUI.SearchButton;
+            }
+            return EAmandsControllerCurrentUI.None;
+        }
+        public void UpdateGlobalPosition()
+        {
+            switch (GetAmandsControllerCurrentUI())
+            {
+                case EAmandsControllerCurrentUI.GridView:
+                    globalPosition.x = currentGridView.transform.position.x + (GridSize * gridViewLocation.x) - (GridSize / 2f);
+                    globalPosition.y = currentGridView.transform.position.y - (GridSize * gridViewLocation.y) + (GridSize / 2f);
+                    globalSize = new Vector2(GridSize, GridSize) / ScreenRatio;
+                    break;
+                case EAmandsControllerCurrentUI.TradingTableGridView:
+                    Vector2 size = currentTradingTableGridView.GetComponent<RectTransform>().sizeDelta * ScreenRatio;
+                    globalPosition.x = (currentTradingTableGridView.transform.position.x - (size.x / 2f)) + (GridSize * gridViewLocation.x) - (GridSize / 2f);
+                    globalPosition.y = (currentTradingTableGridView.transform.position.y + (size.y / 2f)) - (GridSize * gridViewLocation.y) + (GridSize / 2f);
+                    globalSize = new Vector2(GridSize, GridSize) / ScreenRatio;
+                    break;
+                case EAmandsControllerCurrentUI.ModSlotView:
+                    globalPosition = currentModSlotView.transform.position;
+                    globalSize = new Vector2(GridSize, GridSize) / ScreenRatio;
+                    break;
+                case EAmandsControllerCurrentUI.EquipmentSlotView:
+                    globalPosition = new Vector2(currentEquipmentSlotView.transform.position.x + (SlotSize / 2f), currentEquipmentSlotView.transform.position.y - (SlotSize / 2f));
+                    globalSize = new Vector2(SlotSize, SlotSize) / ScreenRatio;
+                    break;
+                case EAmandsControllerCurrentUI.WeaponsSlotView:
+                    globalPosition = new Vector2(currentWeaponsSlotView.transform.position.x + (157.0811f * ScreenRatio) - 2f, currentWeaponsSlotView.transform.position.y - (SlotSize / 2f));
+                    globalSize = new Vector2(157.0811f * ScreenRatio * 2f, SlotSize) / ScreenRatio;
+                    break;
+                case EAmandsControllerCurrentUI.ArmbandSlotView:
+                    globalPosition = new Vector2(currentArmbandSlotView.transform.position.x + (SlotSize / 2f), currentArmbandSlotView.transform.position.y - (32f * ScreenRatio));
+                    globalSize = new Vector2(SlotSize, 32f * ScreenRatio * 2f) / ScreenRatio;
+                    break;
+                case EAmandsControllerCurrentUI.ContainersSlotView:
+                    globalPosition = new Vector2(currentContainersSlotView.transform.position.x + (SlotSize / 2f), currentContainersSlotView.transform.position.y - (SlotSize / 2f));
+                    globalSize = new Vector2(SlotSize, SlotSize) / ScreenRatio;
+                    break;
+                case EAmandsControllerCurrentUI.DogtagSlotView:
+                    globalPosition = new Vector2(currentDogtagSlotView.transform.position.x - GridSize - (GridSize / 2f), currentDogtagSlotView.transform.position.y - (GridSize / 2f));
+                    globalSize = new Vector2(GridSize, GridSize) / ScreenRatio;
+                    break;
+                case EAmandsControllerCurrentUI.SpecialSlotSlotView:
+                    globalPosition.x = currentSpecialSlotSlotView.transform.position.x + (GridSize / 2f);
+                    globalPosition.y = currentSpecialSlotSlotView.transform.position.y - (GridSize / 2f);
+                    globalSize = new Vector2(GridSize, GridSize) / ScreenRatio;
+                    break;
+                case EAmandsControllerCurrentUI.SearchButton:
+                    globalPosition.x = currentSearchButton.transform.position.x;
+                    globalPosition.y = currentSearchButton.transform.position.y;
+                    globalSize = Vector2.zero;
+                    break;
+                case EAmandsControllerCurrentUI.ContextMenuButton:
+                    globalPosition.x = currentSimpleContextMenuButton.transform.position.x;
+                    globalPosition.y = currentSimpleContextMenuButton.transform.position.y;
+                    globalSize = Vector2.zero;
+                    break;
+            }
+        }
+        public void UpdateSelector()
+        {
+            if (SelectedGameObject == null)
+            {
+                SelectedGameObject = new GameObject("SelectorGameObject");
+                if (SelectedGameObject != null)
                 {
-                    ActiveAmandsControllerSets.Add("SearchButton");
+                    SelectedRectTransform = SelectedGameObject.AddComponent<RectTransform>();
+                    if (SelectedRectTransform != null)
+                    {
+                        SelectedRectTransform.sizeDelta = new Vector2(GridSize, GridSize);
+                        SelectedImage = SelectedGameObject.AddComponent<Image>();
+                        if (SelectedImage != null)
+                        {
+                            SelectedImage.sprite = LoadedSprites["Grid.png"];
+                            SelectedImage.raycastTarget = false;
+                            SelectedImage.color = AmandsControllerPlugin.SelectColor.Value;
+                        }
+                        SelectedLayoutElement = SelectedGameObject.AddComponent<LayoutElement>();
+                        if (SelectedLayoutElement != null)
+                        {
+                            SelectedLayoutElement.ignoreLayout = true;
+                        }
+                    }
+                }
+            }
+            if (SelectedGameObject != null && SelectedRectTransform != null && SelectedImage != null)
+            {
+                switch (GetAmandsControllerCurrentUI())
+                {
+                    case EAmandsControllerCurrentUI.GridView:
+                    case EAmandsControllerCurrentUI.TradingTableGridView:
+                    case EAmandsControllerCurrentUI.ModSlotView:
+                    case EAmandsControllerCurrentUI.DogtagSlotView:
+                    case EAmandsControllerCurrentUI.SpecialSlotSlotView:
+                        SelectedImage.sprite = LoadedSprites["Grid.png"];
+                        globalSize = new Vector2(GridSize, GridSize) / ScreenRatio;
+                        break;
+
+                    case EAmandsControllerCurrentUI.EquipmentSlotView:
+                    case EAmandsControllerCurrentUI.ContainersSlotView:
+                        SelectedImage.sprite = LoadedSprites["Slot.png"];
+                        globalSize = new Vector2(SlotSize, SlotSize) / ScreenRatio;
+                        break;
+
+                    case EAmandsControllerCurrentUI.WeaponsSlotView:
+                        SelectedImage.sprite = LoadedSprites["WeaponSlot.png"];
+                        globalSize = new Vector2(157.0811f * ScreenRatio * 2f, SlotSize) / ScreenRatio;
+                        break;
+                    case EAmandsControllerCurrentUI.ArmbandSlotView:
+                        SelectedImage.sprite = LoadedSprites["ArmbandSlot.png"];
+                        globalSize = new Vector2(SlotSize, 32f * ScreenRatio * 2f) / ScreenRatio;
+                        break;
+
+                    case EAmandsControllerCurrentUI.SearchButton:
+                    case EAmandsControllerCurrentUI.ContextMenuButton:
+                        globalSize = Vector2.zero;
+                        SelectedGameObject.SetActive(false);
+                        SelectedGameObject.transform.SetParent(null);
+                        return;
+                }
+                SelectedGameObject.SetActive(false);
+                SelectedGameObject.transform.SetParent(null);
+                if (currentContainedGridsView != null)
+                {
+                    SelectedGameObject.SetActive(true);
+                    SelectedRectTransform.SetParent(currentContainedGridsView.transform);
+                    SelectedRectTransform.sizeDelta = globalSize;
+                    SelectedRectTransform.localPosition = Vector2.zero;
+                    SelectedRectTransform.position = globalPosition;
+                }
+                else if (currentScrollRectNoDrag != null)
+                {
+                    SelectedGameObject.SetActive(true);
+                    SelectedRectTransform.SetParent(currentScrollRectNoDrag.content);
+                    SelectedRectTransform.sizeDelta = globalSize;
+                    SelectedRectTransform.localPosition = Vector2.zero;
+                    SelectedRectTransform.position = globalPosition;
+                }
+                else if (inventoryScreen != null)
+                {
+                    SelectedGameObject.SetActive(true);
+                    SelectedRectTransform.SetParent(inventoryScreen.transform);
+                    SelectedRectTransform.sizeDelta = globalSize;
+                    SelectedRectTransform.localPosition = Vector2.zero;
+                    SelectedRectTransform.position = globalPosition;
                 }
             }
         }
@@ -3931,6 +4330,11 @@ namespace AmandsController
             else
             {
                 ActiveAmandsControllerSets.Remove("SearchButton");
+                if (SearchButtonImage != null)
+                {
+                    SearchButtonImage.color = Color.white;
+                    SearchButtonImage = null;
+                }
             }
         }
         public void AmandsControllerOnPointerMove()
@@ -4389,6 +4793,126 @@ namespace AmandsController
         {
             //ConsoleScreen.Log(stuff);
         }
+        public static void WriteToJsonFile<T>(string filePath, T objectToWrite, bool append = false) where T : new()
+        {
+            TextWriter writer = null;
+            try
+            {
+                var contentsToWriteToFile = JsonConvert.SerializeObject(objectToWrite, Formatting.Indented);//Json.Serialize(objectToWrite);
+                writer = new StreamWriter(filePath, append);
+                writer.Write(contentsToWriteToFile);
+            }
+            finally
+            {
+                if (writer != null)
+                    writer.Close();
+            }
+        }
+        public static T ReadFromJsonFile<T>(string filePath) where T : new()
+        {
+            TextReader reader = null;
+            try
+            {
+                reader = new StreamReader(filePath);
+                var fileContents = reader.ReadToEnd();
+                return Json.Deserialize<T>(fileContents);
+            }
+            finally
+            {
+                if (reader != null)
+                    reader.Close();
+            }
+        }
+        public static void ReloadFiles()
+        {
+            string[] Files = Directory.GetFiles(AppDomain.CurrentDomain.BaseDirectory + "/BepInEx/plugins/Controller/images/", "*.png");
+            foreach (string File in Files)
+            {
+                LoadSprite(File);
+            }
+            string[] AudioFiles = Directory.GetFiles(AppDomain.CurrentDomain.BaseDirectory + "/BepInEx/plugins/Controller/sounds/");
+            foreach (string File in AudioFiles)
+            {
+                LoadAudioClip(File);
+            }
+        }
+        async static void LoadSprite(string path)
+        {
+            LoadedSprites[Path.GetFileName(path)] = await RequestSprite(path);
+        }
+        async static Task<Sprite> RequestSprite(string path)
+        {
+            UnityWebRequest www = UnityWebRequestTexture.GetTexture(path);
+            var SendWeb = www.SendWebRequest();
+
+            while (!SendWeb.isDone)
+                await Task.Yield();
+
+            if (www.isNetworkError || www.isHttpError)
+            {
+                return null;
+            }
+            else
+            {
+                Texture2D texture = ((DownloadHandlerTexture)www.downloadHandler).texture;
+                Sprite sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f));
+
+                return sprite;
+            }
+        }
+        async static void LoadAudioClip(string path)
+        {
+            LoadedAudioClips[Path.GetFileName(path)] = await RequestAudioClip(path);
+        }
+        async static Task<AudioClip> RequestAudioClip(string path)
+        {
+            string extension = Path.GetExtension(path);
+            AudioType audioType = AudioType.WAV;
+            switch (extension)
+            {
+                case ".wav":
+                    audioType = AudioType.WAV;
+                    break;
+                case ".ogg":
+                    audioType = AudioType.OGGVORBIS;
+                    break;
+            }
+            UnityWebRequest www = UnityWebRequestMultimedia.GetAudioClip(path, audioType);
+            var SendWeb = www.SendWebRequest();
+
+            while (!SendWeb.isDone)
+                await Task.Yield();
+
+            if (www.isNetworkError || www.isHttpError)
+            {
+                return null;
+            }
+            else
+            {
+                AudioClip audioclip = DownloadHandlerAudioClip.GetContent(www);
+                return audioclip;
+            }
+        }
+    }
+    public enum EAmandsControllerCurrentUI
+    {
+        None = 0,
+        GridView = 1,
+        TradingTableGridView = 2,
+        ModSlotView = 3,
+        EquipmentSlotView = 4,
+        WeaponsSlotView = 5,
+        ArmbandSlotView = 6,
+        ContainersSlotView = 7,
+        DogtagSlotView = 8,
+        SpecialSlotSlotView = 9,
+        SearchButton = 10,
+        ContextMenuButton = 11
+    }
+    public class ControllerPresetJsonClass
+    {
+        public Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>> AmandsControllerButtonBinds { get; set; }
+        public Dictionary<string, Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>> AmandsControllerSets { get; set; }
     }
     public struct AmandsControllerCommand
     {
@@ -4426,7 +4950,6 @@ namespace AmandsController
             this.AmandsControllerSet = "";
         }
     }
-
     public struct AmandsControllerButtonBind
     {
         public List<AmandsControllerCommand> AmandsControllerCommands;
@@ -4465,7 +4988,6 @@ namespace AmandsController
             this.DoubleClickBind = DoubleClickBind;
         }
     }
-
     public enum EAmandsControllerButton
     {
         A = 0,
