@@ -19,7 +19,7 @@ using Unity.Burst.CompilerServices;
 
 namespace AmandsController
 {
-    [BepInPlugin("com.Amanda.Controller", "Controller", "0.2.5")]
+    [BepInPlugin("com.Amanda.Controller", "Controller", "0.2.7")]
     public class AmandsControllerPlugin : BaseUnityPlugin
     {
         public static GameObject Hook;
@@ -47,6 +47,7 @@ namespace AmandsController
         public static ConfigEntry<float> FloorDecimalAdd { get; set; }
         public static ConfigEntry<float> DoubleClickDelay { get; set; }
         public static ConfigEntry<float> HoldDelay { get; set; }
+        public static ConfigEntry<Color> SelectColor { get; set; }
         private void Awake()
         {
             Debug.LogError("Controller Awake()");
@@ -81,6 +82,7 @@ namespace AmandsController
 
             DoubleClickDelay = Config.Bind("Controller", "DoubleClickDelay", 0.25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 110, IsAdvanced = true }));
             HoldDelay = Config.Bind("Controller", "HoldDelay", 0.25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100, IsAdvanced = true }));
+            SelectColor = Config.Bind("Controller", "SelectColor", new Color(1f, 0.7659f, 0.3518f, 1), new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 90 }));
 
             new AmandsLocalPlayerPatch().Enable();
             new AmandsTarkovApplicationPatch().Enable();
@@ -163,6 +165,7 @@ namespace AmandsController
         private static void PatchPostFix(ref InventoryScreen __instance)
         {
             AmandsControllerPlugin.AmandsControllerClassComponent.UpdateInterfaceBinds(true);
+            AmandsControllerPlugin.AmandsControllerClassComponent.inventoryScreen = __instance;
         }
     }
     public class AmandsInventoryScreenClosePatch : ModulePatch
@@ -573,7 +576,7 @@ namespace AmandsController
         [PatchPrefix]
         private static void PatchPreFix(ref ItemView __instance, PointerEventData eventData)
         {
-            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging)
+            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging && AmandsControllerPlugin.AmandsControllerClassComponent.InRaid)
             {
                 AmandsControllerPlugin.AmandsControllerClassComponent.AmandsControllerCancelDrag();
             }
@@ -588,7 +591,7 @@ namespace AmandsController
         [PatchPostfix]
         private static void PatchPostFix(ref ItemView __instance, PointerEventData eventData)
         {
-            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging)
+            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging && AmandsControllerPlugin.AmandsControllerClassComponent.InRaid)
             {
                 AmandsControllerPlugin.AmandsControllerClassComponent.AmandsControllerCancelDrag();
             }
@@ -603,7 +606,8 @@ namespace AmandsController
         [PatchPrefix]
         private static bool PatchPreFix(ref ItemView __instance)
         {
-            return !AmandsControllerPlugin.AmandsControllerClassComponent.Dragging;
+            if (!AmandsControllerPlugin.AmandsControllerClassComponent.InRaid) return true;
+            return (!AmandsControllerPlugin.AmandsControllerClassComponent.Dragging);
         }
     }
     public class DraggedItemViewMethod_3 : ModulePatch
@@ -615,7 +619,7 @@ namespace AmandsController
         [PatchPrefix]
         private static bool PatchPreFix(ref DraggedItemView __instance)
         {
-            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging)
+            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging && AmandsControllerPlugin.AmandsControllerClassComponent.InRaid)
             {
                 RectTransform RectTransform_0 = Traverse.Create(__instance).Property("RectTransform_0").GetValue<RectTransform>();
                 RectTransform_0.position = AmandsControllerPlugin.AmandsControllerClassComponent.globalPosition;
@@ -636,7 +640,7 @@ namespace AmandsController
         [PatchPrefix]
         private static void PatchPreFix(ref ItemView __instance, ref Vector2 position)
         {
-            if (AmandsControllerPlugin.AmandsControllerClassComponent.connected) position = AmandsControllerPlugin.AmandsControllerClassComponent.globalPosition + new Vector2(32f,-19f);
+            if (AmandsControllerPlugin.AmandsControllerClassComponent.connected && AmandsControllerPlugin.AmandsControllerClassComponent.InRaid) position = AmandsControllerPlugin.AmandsControllerClassComponent.globalPosition + new Vector2(32f,-19f);
         }
     }
     public class ScrollRectNoDragOnEnable : ModulePatch
@@ -683,7 +687,7 @@ namespace AmandsController
         [PatchPostfix]
         private static void PatchPostFix(ref SimpleStashPanel __instance)
         {
-            if (!Searching) ShowAsync(__instance);
+            if (!Searching && AmandsControllerPlugin.AmandsControllerClassComponent.InRaid) ShowAsync(__instance);
         }
         private async static void ShowAsync(SimpleStashPanel instance)
         {
@@ -709,6 +713,7 @@ namespace AmandsController
                     }
                 }
             }
+            Searching = false;
         }
     }
     public class SimpleContextMenuButtonShowPatch : ModulePatch
@@ -725,7 +730,7 @@ namespace AmandsController
             if (!AmandsControllerPlugin.AmandsControllerClassComponent.ContextMenu)
             {
                 AmandsControllerPlugin.AmandsControllerClassComponent.UpdateContextMenuBinds(true);
-                AmandsControllerPlugin.AmandsControllerClassComponent.ControllerUISelect(__instance);
+                if (AmandsControllerPlugin.AmandsControllerClassComponent.InRaid) AmandsControllerPlugin.AmandsControllerClassComponent.ControllerUISelect(__instance);
                 //ControllerUIMoveAsync(__instance);
             }
         }
