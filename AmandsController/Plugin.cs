@@ -19,7 +19,7 @@ using Unity.Burst.CompilerServices;
 
 namespace AmandsController
 {
-    [BepInPlugin("com.Amanda.Controller", "Controller", "0.2.7")]
+    [BepInPlugin("com.Amanda.Controller", "Controller", "0.2.9")]
     public class AmandsControllerPlugin : BaseUnityPlugin
     {
         public static GameObject Hook;
@@ -48,6 +48,12 @@ namespace AmandsController
         public static ConfigEntry<float> DoubleClickDelay { get; set; }
         public static ConfigEntry<float> HoldDelay { get; set; }
         public static ConfigEntry<Color> SelectColor { get; set; }
+        public static ConfigEntry<Vector2> BlockPosition { get; set; }
+        public static ConfigEntry<Vector2> BlockSize { get; set; }
+        public static ConfigEntry<int> BlockSpacing { get; set; }
+        public static ConfigEntry<int> BlockIconSpacing { get; set; }
+        public static ConfigEntry<int> PressFontSize { get; set; }
+        public static ConfigEntry<int> HoldDoubleClickFontSize { get; set; }
         private void Awake()
         {
             Debug.LogError("Controller Awake()");
@@ -59,6 +65,13 @@ namespace AmandsController
 
         private void Start()
         {
+            BlockPosition = Config.Bind("ControllerUI", "BlockPosition", new Vector2(950f, 80f), new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 1500 }));
+            BlockSize = Config.Bind("ControllerUI", "BlockSize", new Vector2(40f, 40f), new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 1400 }));
+            BlockSpacing = Config.Bind("ControllerUI", "BlockSpacing", 16, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 1300 }));
+            BlockIconSpacing = Config.Bind("ControllerUI", "BlockIconSpacing", 8, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 1200 }));
+            PressFontSize = Config.Bind("ControllerUI", "PressFontSize", 20, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 1100 }));
+            HoldDoubleClickFontSize = Config.Bind("ControllerUI", "HoldDoubleClickFontSize", 12, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 1000 }));
+
             UserIndex = Config.Bind("Controller", "User Index", 1, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 270 }));
             DebugX = Config.Bind("Controller", "Debug X", 1920 / 2, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 260 }));
             DebugY = Config.Bind("Controller", "Debug Y", 1080 / 2, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 250 }));
@@ -86,6 +99,7 @@ namespace AmandsController
 
             new AmandsLocalPlayerPatch().Enable();
             new AmandsTarkovApplicationPatch().Enable();
+            new AmandsSSAAPatch().Enable();
             new AmandsInventoryScreenShowPatch().Enable();
             new AmandsInventoryScreenClosePatch().Enable();
             new AmandsActionPanelPatch().Enable();
@@ -155,6 +169,18 @@ namespace AmandsController
             AmandsControllerPlugin.AmandsControllerClassComponent.inputTree = inputTree;
         }
     }
+    public class AmandsSSAAPatch : ModulePatch
+    {
+        protected override MethodBase GetTargetMethod()
+        {
+            return typeof(SSAA).GetMethod("Awake", BindingFlags.Instance | BindingFlags.NonPublic);
+        }
+        [PatchPostfix]
+        private static void PatchPostFix(ref SSAA __instance)
+        {
+            AmandsControllerPlugin.AmandsControllerClassComponent.currentSSAA = __instance;
+        }
+    }
     public class AmandsInventoryScreenShowPatch : ModulePatch
     {
         protected override MethodBase GetTargetMethod()
@@ -164,8 +190,15 @@ namespace AmandsController
         [PatchPostfix]
         private static void PatchPostFix(ref InventoryScreen __instance)
         {
+            AmandsControllerPlugin.AmandsControllerClassComponent.Tabs = Traverse.Create(__instance).Field("dictionary_0").GetValue<Dictionary<InventoryScreen.EInventoryTab, Tab>>();
             AmandsControllerPlugin.AmandsControllerClassComponent.UpdateInterfaceBinds(true);
-            AmandsControllerPlugin.AmandsControllerClassComponent.inventoryScreen = __instance;
+            AmandsControllerPlugin.AmandsControllerClassComponent.UpdateInterface(__instance);
+            AsynControllerUIMoveToClosest();
+        }
+        private static async void AsynControllerUIMoveToClosest()
+        {
+            await Task.Delay(200);
+            AmandsControllerPlugin.AmandsControllerClassComponent.ControllerUIMoveToClosest(false);
         }
     }
     public class AmandsInventoryScreenClosePatch : ModulePatch
@@ -576,7 +609,7 @@ namespace AmandsController
         [PatchPrefix]
         private static void PatchPreFix(ref ItemView __instance, PointerEventData eventData)
         {
-            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging && AmandsControllerPlugin.AmandsControllerClassComponent.InRaid)
+            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging && (AmandsControllerPlugin.AmandsControllerClassComponent.InRaid || AmandsControllerPlugin.AmandsControllerClassComponent.ForceOutsideRaid))
             {
                 AmandsControllerPlugin.AmandsControllerClassComponent.AmandsControllerCancelDrag();
             }
@@ -591,7 +624,7 @@ namespace AmandsController
         [PatchPostfix]
         private static void PatchPostFix(ref ItemView __instance, PointerEventData eventData)
         {
-            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging && AmandsControllerPlugin.AmandsControllerClassComponent.InRaid)
+            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging && (AmandsControllerPlugin.AmandsControllerClassComponent.InRaid || AmandsControllerPlugin.AmandsControllerClassComponent.ForceOutsideRaid))
             {
                 AmandsControllerPlugin.AmandsControllerClassComponent.AmandsControllerCancelDrag();
             }
@@ -606,7 +639,7 @@ namespace AmandsController
         [PatchPrefix]
         private static bool PatchPreFix(ref ItemView __instance)
         {
-            if (!AmandsControllerPlugin.AmandsControllerClassComponent.InRaid) return true;
+            if (!(AmandsControllerPlugin.AmandsControllerClassComponent.InRaid || AmandsControllerPlugin.AmandsControllerClassComponent.ForceOutsideRaid)) return true;
             return (!AmandsControllerPlugin.AmandsControllerClassComponent.Dragging);
         }
     }
@@ -619,7 +652,7 @@ namespace AmandsController
         [PatchPrefix]
         private static bool PatchPreFix(ref DraggedItemView __instance)
         {
-            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging && AmandsControllerPlugin.AmandsControllerClassComponent.InRaid)
+            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging && (AmandsControllerPlugin.AmandsControllerClassComponent.InRaid || AmandsControllerPlugin.AmandsControllerClassComponent.ForceOutsideRaid))
             {
                 RectTransform RectTransform_0 = Traverse.Create(__instance).Property("RectTransform_0").GetValue<RectTransform>();
                 RectTransform_0.position = AmandsControllerPlugin.AmandsControllerClassComponent.globalPosition;
@@ -640,7 +673,7 @@ namespace AmandsController
         [PatchPrefix]
         private static void PatchPreFix(ref ItemView __instance, ref Vector2 position)
         {
-            if (AmandsControllerPlugin.AmandsControllerClassComponent.connected && AmandsControllerPlugin.AmandsControllerClassComponent.InRaid) position = AmandsControllerPlugin.AmandsControllerClassComponent.globalPosition + new Vector2(32f,-19f);
+            if (AmandsControllerPlugin.AmandsControllerClassComponent.connected && (AmandsControllerPlugin.AmandsControllerClassComponent.InRaid || AmandsControllerPlugin.AmandsControllerClassComponent.ForceOutsideRaid)) position = AmandsControllerPlugin.AmandsControllerClassComponent.globalPosition + new Vector2(32f,-19f);
         }
     }
     public class ScrollRectNoDragOnEnable : ModulePatch
@@ -687,7 +720,7 @@ namespace AmandsController
         [PatchPostfix]
         private static void PatchPostFix(ref SimpleStashPanel __instance)
         {
-            if (!Searching && AmandsControllerPlugin.AmandsControllerClassComponent.InRaid) ShowAsync(__instance);
+            if (!Searching && (AmandsControllerPlugin.AmandsControllerClassComponent.InRaid || AmandsControllerPlugin.AmandsControllerClassComponent.ForceOutsideRaid)) ShowAsync(__instance);
         }
         private async static void ShowAsync(SimpleStashPanel instance)
         {
@@ -730,7 +763,7 @@ namespace AmandsController
             if (!AmandsControllerPlugin.AmandsControllerClassComponent.ContextMenu)
             {
                 AmandsControllerPlugin.AmandsControllerClassComponent.UpdateContextMenuBinds(true);
-                if (AmandsControllerPlugin.AmandsControllerClassComponent.InRaid) AmandsControllerPlugin.AmandsControllerClassComponent.ControllerUISelect(__instance);
+                if ((AmandsControllerPlugin.AmandsControllerClassComponent.InRaid || AmandsControllerPlugin.AmandsControllerClassComponent.ForceOutsideRaid)) AmandsControllerPlugin.AmandsControllerClassComponent.ControllerUISelect(__instance);
                 //ControllerUIMoveAsync(__instance);
             }
         }
