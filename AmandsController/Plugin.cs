@@ -15,45 +15,65 @@ using System.Threading.Tasks;
 using Sirenix.Utilities;
 using EFT.InputSystem;
 using UnityEngine.EventSystems;
-using Unity.Burst.CompilerServices;
 
 namespace AmandsController
 {
-    [BepInPlugin("com.Amanda.Controller", "Controller", "0.2.9")]
+    [BepInPlugin("com.Amanda.Controller", "Controller", "0.3.3")]
     public class AmandsControllerPlugin : BaseUnityPlugin
     {
         public static GameObject Hook;
         public static AmandsControllerClass AmandsControllerClassComponent;
         public static InputGetKeyDownLeftControlPatch LeftControl;
+
+        // AmandsController
         public static ConfigEntry<int> UserIndex { get; set; }
-        public static ConfigEntry<int> DebugX { get; set; }
-        public static ConfigEntry<int> DebugY { get; set; }
+
+        // Input
+        public static ConfigEntry<float> LSDeadzone { get; set; }
+        public static ConfigEntry<float> RSDeadzone { get; set; }
+        public static ConfigEntry<float> LTDeadzone { get; set; }
+        public static ConfigEntry<float> RTDeadzone { get; set; }
+        public static ConfigEntry<float> DoubleClickDelay { get; set; }
+        public static ConfigEntry<float> HoldDelay { get; set; }
+
+        // Aim
+        public static ConfigEntry<Vector2> Sensitivity { get; set; }
+        public static ConfigEntry<Vector2> AimingSensitivity { get; set; }
+        public static ConfigEntry<bool> InvertY { get; set; }
+        public static ConfigEntry<float> AimDeadzone { get; set; }
+
+        // Aim Assist
         public static ConfigEntry<bool> Magnetism { get; set; }
         public static ConfigEntry<float> Stickiness { get; set; }
-        public static ConfigEntry<float> AutoAim { get; set; }
         public static ConfigEntry<float> StickinessSmooth { get; set; }
+        public static ConfigEntry<float> AutoAim { get; set; }
         public static ConfigEntry<float> AutoAimSmooth { get; set; }
         public static ConfigEntry<float> MagnetismRadius { get; set; }
         public static ConfigEntry<float> StickinessRadius { get; set; }
         public static ConfigEntry<float> AutoAimRadius { get; set; }
-        public static ConfigEntry<float> AutoAimEnemyVelocity { get; set; }
         public static ConfigEntry<float> Radius { get; set; }
-        public static ConfigEntry<Vector2> Sensitivity { get; set; }
-        public static ConfigEntry<float> ScrollSensitivity { get; set; }
-        public static ConfigEntry<float> LeanSensitivity { get; set; }
-        public static ConfigEntry<float> LDeadzone { get; set; }
-        public static ConfigEntry<float> RDeadzone { get; set; }
+
+
+        // Movement
+        public static ConfigEntry<float> MovementDeadzone { get; set; }
         public static ConfigEntry<float> DeadzoneBuffer { get; set; }
-        public static ConfigEntry<float> FloorDecimalAdd { get; set; }
-        public static ConfigEntry<float> DoubleClickDelay { get; set; }
-        public static ConfigEntry<float> HoldDelay { get; set; }
+        public static ConfigEntry<float> LeanSensitivity { get; set; }
+
+        // UI
+        public static ConfigEntry<bool> DualsenseIcons { get; set; }
+        public static ConfigEntry<float> ScrollSensitivity { get; set; }
+
+        // UI Selected Box
         public static ConfigEntry<Color> SelectColor { get; set; }
+
+        // UI Button Blocks
         public static ConfigEntry<Vector2> BlockPosition { get; set; }
         public static ConfigEntry<Vector2> BlockSize { get; set; }
         public static ConfigEntry<int> BlockSpacing { get; set; }
         public static ConfigEntry<int> BlockIconSpacing { get; set; }
         public static ConfigEntry<int> PressFontSize { get; set; }
         public static ConfigEntry<int> HoldDoubleClickFontSize { get; set; }
+
         private void Awake()
         {
             Debug.LogError("Controller Awake()");
@@ -65,37 +85,46 @@ namespace AmandsController
 
         private void Start()
         {
-            BlockPosition = Config.Bind("ControllerUI", "BlockPosition", new Vector2(950f, 80f), new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 1500 }));
-            BlockSize = Config.Bind("ControllerUI", "BlockSize", new Vector2(40f, 40f), new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 1400 }));
-            BlockSpacing = Config.Bind("ControllerUI", "BlockSpacing", 16, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 1300 }));
-            BlockIconSpacing = Config.Bind("ControllerUI", "BlockIconSpacing", 8, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 1200 }));
-            PressFontSize = Config.Bind("ControllerUI", "PressFontSize", 20, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 1100 }));
-            HoldDoubleClickFontSize = Config.Bind("ControllerUI", "HoldDoubleClickFontSize", 12, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 1000 }));
 
-            UserIndex = Config.Bind("Controller", "User Index", 1, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 270 }));
-            DebugX = Config.Bind("Controller", "Debug X", 1920 / 2, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 260 }));
-            DebugY = Config.Bind("Controller", "Debug Y", 1080 / 2, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 250 }));
-            Magnetism = Config.Bind("Controller", "Magnetism", true, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 240 }));
-            Stickiness = Config.Bind("Controller", "Stickiness", 0.3f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 230 }));
-            AutoAim = Config.Bind("Controller", "AutoAim", 0.25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 220 }));
-            StickinessSmooth = Config.Bind("Controller", "StickinessSmooth", 10f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 230 }));
-            AutoAimSmooth = Config.Bind("Controller", "AutoAimSmooth", 10f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 220 }));
-            MagnetismRadius = Config.Bind("Controller", "MagnetismRadius", 0.1f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 210 }));
-            StickinessRadius = Config.Bind("Controller", "StickinessRadius", 0.2f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 200 }));
-            AutoAimRadius = Config.Bind("Controller", "AutoAimRadius", 0.5f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 190 }));
-            AutoAimEnemyVelocity = Config.Bind("Controller", "AutoAimEnemyVelocity", 0.01f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 188 }));
-            Radius = Config.Bind("Controller", "Radius", 5f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 180, IsAdvanced = true }));
-            Sensitivity = Config.Bind("Controller", "Sensitivity", new Vector2(20f,-12f), new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 170 }));
-            ScrollSensitivity = Config.Bind("Controller", "ScrollSensitivity", 1f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 168 }));
-            LeanSensitivity = Config.Bind("Controller", "LeanSensitivity", 50f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 160, IsAdvanced = true }));
-            LDeadzone = Config.Bind("Controller", "LDeadzone", 0.25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 150 }));
-            RDeadzone = Config.Bind("Controller", "RDeadzone", 0.08f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 140 }));
-            DeadzoneBuffer = Config.Bind("Controller", "DeadzoneBuffer", 0.5f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 130, IsAdvanced = true }));
-            FloorDecimalAdd = Config.Bind("Controller", "FloorDecimalAdd", 0.005f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 120, IsAdvanced = true }));
+            UserIndex = Config.Bind("AmandsController", "User Index", 1, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100 }));
 
-            DoubleClickDelay = Config.Bind("Controller", "DoubleClickDelay", 0.25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 110, IsAdvanced = true }));
-            HoldDelay = Config.Bind("Controller", "HoldDelay", 0.25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100, IsAdvanced = true }));
-            SelectColor = Config.Bind("Controller", "SelectColor", new Color(1f, 0.7659f, 0.3518f, 1), new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 90 }));
+            LSDeadzone = Config.Bind("Inputs", "LSDeadzone", 0.25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 150, IsAdvanced = true }));
+            RSDeadzone = Config.Bind("Inputs", "RSDeadzone", 0.25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 140, IsAdvanced = true }));
+            LTDeadzone = Config.Bind("Inputs", "LTDeadzone", 0.25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 130, IsAdvanced = true }));
+            RTDeadzone = Config.Bind("Inputs", "RTDeadzone", 0.25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 120, IsAdvanced = true }));
+            DoubleClickDelay = Config.Bind("Inputs", "DoubleClickDelay", 0.25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 110, IsAdvanced = true }));
+            HoldDelay = Config.Bind("Inputs", "HoldDelay", 0.25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100, IsAdvanced = true }));
+
+            Sensitivity = Config.Bind("Aim", "Sensitivity", new Vector2(20f, 12f), new ConfigDescription("EFT Mouse Sensivity affects this value", null, new ConfigurationManagerAttributes { Order = 140 }));
+            AimingSensitivity = Config.Bind("Aim", "AimingSensitivity", new Vector2(20f, 12f), new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 130 }));
+            InvertY = Config.Bind("Aim", "InvertY", false, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 120 }));
+            AimDeadzone = Config.Bind("Aim", "AimDeadzone", 0.08f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 110 }));
+
+            Magnetism = Config.Bind("Aim Assist", "Magnetism", false, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 180 }));
+            Stickiness = Config.Bind("Aim Assist", "Stickiness", 0.3f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 170 }));
+            AutoAim = Config.Bind("Aim Assist", "AutoAim", 0.25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 160 }));
+            StickinessSmooth = Config.Bind("Aim Assist", "StickinessSmooth", 10f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 150, IsAdvanced = true }));
+            AutoAimSmooth = Config.Bind("Aim Assist", "AutoAimSmooth", 10f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 140, IsAdvanced = true }));
+            MagnetismRadius = Config.Bind("Aim Assist", "MagnetismRadius", 0.1f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 130, IsAdvanced = true }));
+            StickinessRadius = Config.Bind("Aim Assist", "StickinessRadius", 0.2f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 120, IsAdvanced = true }));
+            AutoAimRadius = Config.Bind("Aim Assist", "AutoAimRadius", 0.5f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 110, IsAdvanced = true }));
+            Radius = Config.Bind("Aim Assist", "Radius", 5f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100, IsAdvanced = true }));
+
+            MovementDeadzone = Config.Bind("Movement", "MovementDeadzone", 0.25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 130 }));
+            DeadzoneBuffer = Config.Bind("Movement", "DeadzoneBuffer", 0.5f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 120, IsAdvanced = true }));
+            LeanSensitivity = Config.Bind("Movement", "LeanSensitivity", 50f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100, IsAdvanced = true }));
+
+            DualsenseIcons = Config.Bind("UI", "DualsenseIcons", false, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 110 }));
+            ScrollSensitivity = Config.Bind("UI", "ScrollSensitivity", 1f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100 }));
+
+            SelectColor = Config.Bind("UI Selected Box", "SelectColor", new Color(1f, 0.7659f, 0.3518f, 1), new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100 }));
+
+            BlockPosition = Config.Bind("UI Button Blocks", "BlockPosition", new Vector2(-30f, 57f), new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 150 }));
+            BlockSize = Config.Bind("UI Button Blocks", "BlockSize", new Vector2(40f, 40f), new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 140, IsAdvanced = true }));
+            BlockSpacing = Config.Bind("UI Button Blocks", "BlockSpacing", 16, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 130, IsAdvanced = true }));
+            BlockIconSpacing = Config.Bind("UI Button Blocks", "BlockIconSpacing", 8, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 120, IsAdvanced = true }));
+            PressFontSize = Config.Bind("UI Button Blocks", "PressFontSize", 20, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 110, IsAdvanced = true }));
+            HoldDoubleClickFontSize = Config.Bind("UI Button Blocks", "HoldDoubleClickFontSize", 12, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100, IsAdvanced = true }));
 
             new AmandsLocalPlayerPatch().Enable();
             new AmandsTarkovApplicationPatch().Enable();
@@ -103,8 +132,6 @@ namespace AmandsController
             new AmandsInventoryScreenShowPatch().Enable();
             new AmandsInventoryScreenClosePatch().Enable();
             new AmandsActionPanelPatch().Enable();
-            new AmandsHealingLimbSelectorShowPatch().Enable();
-            new AmandsHealingLimbSelectorClosePatch().Enable();
             new BattleStancePanelPatch().Enable();
             // Controller UI
             new TemplatedGridsViewShowPatch().Enable();
@@ -122,8 +149,8 @@ namespace AmandsController
             new ContainersPanelClosePatch().Enable();
             new SearchButtonShowPatch().Enable();
             new SearchButtonClosePatch().Enable();
-            new SimpleContextMenuButtonShowPatch().Enable();
-            new SimpleContextMenuButtonClosePatch().Enable();
+            new ContextMenuButtonShowPatch().Enable();
+            new ContextMenuButtonClosePatch().Enable();
             new ScrollRectNoDragOnEnable().Enable();
             new ScrollRectNoDragOnDisable().Enable();
 
@@ -161,7 +188,7 @@ namespace AmandsController
     {
         protected override MethodBase GetTargetMethod()
         {
-            return typeof(TarkovApplication).GetMethod("Init", BindingFlags.Instance | BindingFlags.NonPublic);
+            return typeof(TarkovApplication).GetMethod("Init", BindingFlags.Instance | BindingFlags.Public);
         }
         [PatchPostfix]
         private static void PatchPostFix(ref TarkovApplication __instance, InputTree inputTree)
@@ -185,7 +212,7 @@ namespace AmandsController
     {
         protected override MethodBase GetTargetMethod()
         {
-            return typeof(InventoryScreen).GetMethod("Show", BindingFlags.Instance | BindingFlags.Public);
+            return typeof(InventoryScreen).GetMethods(BindingFlags.Instance | BindingFlags.Public).First(x => x.Name == "Show");
         }
         [PatchPostfix]
         private static void PatchPostFix(ref InventoryScreen __instance)
@@ -217,7 +244,7 @@ namespace AmandsController
     {
         protected override MethodBase GetTargetMethod()
         {
-            return typeof(ActionPanel).GetMethod("method_0", BindingFlags.Instance | BindingFlags.NonPublic);
+            return typeof(ActionPanel).GetMethod("method_0", BindingFlags.Instance | BindingFlags.Public);
         }
         [PatchPostfix]
         private static void PatchPostFix(ref ActionPanel __instance)
@@ -227,46 +254,6 @@ namespace AmandsController
             AmandsControllerPlugin.AmandsControllerClassComponent.UpdateActionPanelBinds(Enabled);
         }
     }
-    public class AmandsHealingLimbSelectorShowPatch : ModulePatch
-    {
-        protected override MethodBase GetTargetMethod()
-        {
-            return typeof(HealingLimbSelector).GetMethod("Show", BindingFlags.Instance | BindingFlags.Public);
-        }
-        [PatchPostfix]
-        private static void PatchPostFix(ref HealingLimbSelector __instance)
-        {
-            AmandsControllerPlugin.AmandsControllerClassComponent.UpdateHealingLimbSelectorBinds(true);
-        }
-    }
-    public class AmandsHealingLimbSelectorClosePatch : ModulePatch
-    {
-        protected override MethodBase GetTargetMethod()
-        {
-            return typeof(HealingLimbSelector).GetMethod("Close", BindingFlags.Instance | BindingFlags.Public);
-        }
-        [PatchPostfix]
-        private static void PatchPostFix(ref HealingLimbSelector __instance)
-        {
-            AmandsControllerPlugin.AmandsControllerClassComponent.UpdateHealingLimbSelectorBinds(false);
-        }
-    }
-    /*public class AmandsGamePlayerOwnerPatch : ModulePatch
-    {
-        protected override MethodBase GetTargetMethod()
-        {
-            return typeof(GamePlayerOwner).GetMethod("Create", BindingFlags.Static | BindingFlags.Public);
-        }
-        [PatchPostfix]
-        private static void PatchPostFix(ref GamePlayerOwner __instance, Player player)
-        {
-            LocalPlayer localPlayer = player as LocalPlayer;
-            if (localPlayer != null && localPlayer.IsYourPlayer)
-            {
-                AmandsControllerPlugin.AmandsControllerClassComponent.UpdateController(localPlayer);
-            }
-        }
-    }*/
     public class BattleStancePanelPatch : ModulePatch
     {
         protected override MethodBase GetTargetMethod()
@@ -284,7 +271,7 @@ namespace AmandsController
     {
         protected override MethodBase GetTargetMethod()
         {
-            return typeof(TemplatedGridsView).GetMethod("Show", BindingFlags.Instance | BindingFlags.Public);
+            return typeof(TemplatedGridsView).GetMethods(BindingFlags.Instance | BindingFlags.Public).First(x => x.Name == "Show");
         }
         [PatchPostfix]
         private static void PatchPostFix(ref TemplatedGridsView __instance)
@@ -308,7 +295,7 @@ namespace AmandsController
     {
         protected override MethodBase GetTargetMethod()
         {
-            return typeof(GeneratedGridsView).GetMethod("Show", BindingFlags.Instance | BindingFlags.Public);
+            return typeof(GeneratedGridsView).GetMethods(BindingFlags.Instance | BindingFlags.Public).First(x => x.Name == "Show");
         }
         [PatchPostfix]
         private static void PatchPostFix(ref GeneratedGridsView __instance)
@@ -379,10 +366,6 @@ namespace AmandsController
 
             if (__instance.GetComponentInParent<GridWindow>() != null)
             {
-                foreach (GridView gridView in __instance.GridViews)
-                {
-                    //if (AmandsControllerPlugin.AmandsControllerClassComponent.currentGridView == gridView) AmandsControllerPlugin.AmandsControllerClassComponent.currentGridView = null;
-                }
                 AmandsControllerPlugin.AmandsControllerClassComponent.containedGridsViews.Remove(__instance);
             }
         }
@@ -400,11 +383,9 @@ namespace AmandsController
             if (AmandsControllerPlugin.AmandsControllerClassComponent.tradingTableGridView == __instance)
             {
                 AmandsControllerPlugin.AmandsControllerClassComponent.tradingTableGridView = null;
-                //AmandsControllerPlugin.AmandsControllerClassComponent.currentTradingTableGridView = null;
                 return;
             }
             if (!AmandsControllerPlugin.AmandsControllerClassComponent.gridViews.Contains(__instance)) return;
-            //if (AmandsControllerPlugin.AmandsControllerClassComponent.currentGridView == __instance) AmandsControllerPlugin.AmandsControllerClassComponent.currentGridView = null;
             AmandsControllerPlugin.AmandsControllerClassComponent.gridViews.Remove(__instance);
         }
     }
@@ -466,18 +447,12 @@ namespace AmandsController
         {
             if (__instance.gameObject.name == "Gear Panel")
             {
-                //AmandsControllerPlugin.AmandsControllerClassComponent.currentEquipmentSlotView = null;
-                //AmandsControllerPlugin.AmandsControllerClassComponent.currentWeaponsSlotView = null;
-                //AmandsControllerPlugin.AmandsControllerClassComponent.currentArmbandSlotView = null;
                 AmandsControllerPlugin.AmandsControllerClassComponent.equipmentSlotViews.Clear();
                 AmandsControllerPlugin.AmandsControllerClassComponent.weaponsSlotViews.Clear();
                 AmandsControllerPlugin.AmandsControllerClassComponent.armbandSlotView = null;
             }
             else
             {
-                //AmandsControllerPlugin.AmandsControllerClassComponent.currentEquipmentSlotView = null;
-                //AmandsControllerPlugin.AmandsControllerClassComponent.currentWeaponsSlotView = null;
-                //AmandsControllerPlugin.AmandsControllerClassComponent.currentArmbandSlotView = null;
                 AmandsControllerPlugin.AmandsControllerClassComponent.lootEquipmentSlotViews.Clear();
                 AmandsControllerPlugin.AmandsControllerClassComponent.lootWeaponsSlotViews.Clear();
                 AmandsControllerPlugin.AmandsControllerClassComponent.lootArmbandSlotView = null;
@@ -528,13 +503,11 @@ namespace AmandsController
         {
             if (__instance.transform.parent.gameObject.name == "Scrollview Parent")
             {
-                //AmandsControllerPlugin.AmandsControllerClassComponent.currentContainersSlotView = null;
                 AmandsControllerPlugin.AmandsControllerClassComponent.containersSlotViews.Clear();
                 AmandsControllerPlugin.AmandsControllerClassComponent.specialSlotSlotViews.Clear();
             }
             else
             {
-                //AmandsControllerPlugin.AmandsControllerClassComponent.currentContainersSlotView = null;
                 AmandsControllerPlugin.AmandsControllerClassComponent.lootContainersSlotViews.Clear();
             }
         }
@@ -609,9 +582,9 @@ namespace AmandsController
         [PatchPrefix]
         private static void PatchPreFix(ref ItemView __instance, PointerEventData eventData)
         {
-            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging && (AmandsControllerPlugin.AmandsControllerClassComponent.InRaid || AmandsControllerPlugin.AmandsControllerClassComponent.ForceOutsideRaid))
+            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging && AmandsControllerPlugin.AmandsControllerClassComponent.InRaid)
             {
-                AmandsControllerPlugin.AmandsControllerClassComponent.AmandsControllerCancelDrag();
+                AmandsControllerPlugin.AmandsControllerClassComponent.ControllerCancelDrag();
             }
         }
     }
@@ -624,9 +597,9 @@ namespace AmandsController
         [PatchPostfix]
         private static void PatchPostFix(ref ItemView __instance, PointerEventData eventData)
         {
-            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging && (AmandsControllerPlugin.AmandsControllerClassComponent.InRaid || AmandsControllerPlugin.AmandsControllerClassComponent.ForceOutsideRaid))
+            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging && AmandsControllerPlugin.AmandsControllerClassComponent.InRaid)
             {
-                AmandsControllerPlugin.AmandsControllerClassComponent.AmandsControllerCancelDrag();
+                AmandsControllerPlugin.AmandsControllerClassComponent.ControllerCancelDrag();
             }
         }
     }
@@ -634,12 +607,12 @@ namespace AmandsController
     {
         protected override MethodBase GetTargetMethod()
         {
-            return typeof(ItemView).GetMethod("Update", BindingFlags.Instance | BindingFlags.NonPublic);
+            return typeof(ItemView).GetMethod("Update", BindingFlags.Instance | BindingFlags.Public);
         }
         [PatchPrefix]
         private static bool PatchPreFix(ref ItemView __instance)
         {
-            if (!(AmandsControllerPlugin.AmandsControllerClassComponent.InRaid || AmandsControllerPlugin.AmandsControllerClassComponent.ForceOutsideRaid)) return true;
+            if (!AmandsControllerPlugin.AmandsControllerClassComponent.InRaid) return true;
             return (!AmandsControllerPlugin.AmandsControllerClassComponent.Dragging);
         }
     }
@@ -647,12 +620,12 @@ namespace AmandsController
     {
         protected override MethodBase GetTargetMethod()
         {
-            return typeof(DraggedItemView).GetMethod("method_3", BindingFlags.Instance | BindingFlags.NonPublic);
+            return typeof(DraggedItemView).GetMethod("method_3", BindingFlags.Instance | BindingFlags.Public);
         }
         [PatchPrefix]
         private static bool PatchPreFix(ref DraggedItemView __instance)
         {
-            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging && (AmandsControllerPlugin.AmandsControllerClassComponent.InRaid || AmandsControllerPlugin.AmandsControllerClassComponent.ForceOutsideRaid))
+            if (AmandsControllerPlugin.AmandsControllerClassComponent.Dragging && AmandsControllerPlugin.AmandsControllerClassComponent.InRaid)
             {
                 RectTransform RectTransform_0 = Traverse.Create(__instance).Property("RectTransform_0").GetValue<RectTransform>();
                 RectTransform_0.position = AmandsControllerPlugin.AmandsControllerClassComponent.globalPosition;
@@ -668,19 +641,19 @@ namespace AmandsController
     {
         protected override MethodBase GetTargetMethod()
         {
-            return typeof(Tooltip).GetMethod("method_0", BindingFlags.Instance | BindingFlags.NonPublic);
+            return typeof(Tooltip).GetMethod("method_0", BindingFlags.Instance | BindingFlags.Public);
         }
         [PatchPrefix]
         private static void PatchPreFix(ref ItemView __instance, ref Vector2 position)
         {
-            if (AmandsControllerPlugin.AmandsControllerClassComponent.connected && (AmandsControllerPlugin.AmandsControllerClassComponent.InRaid || AmandsControllerPlugin.AmandsControllerClassComponent.ForceOutsideRaid)) position = AmandsControllerPlugin.AmandsControllerClassComponent.globalPosition + new Vector2(32f,-19f);
+            if (AmandsControllerPlugin.AmandsControllerClassComponent.connected && AmandsControllerPlugin.AmandsControllerClassComponent.InRaid) position = AmandsControllerPlugin.AmandsControllerClassComponent.globalPosition + new Vector2(32f,-19f);
         }
     }
     public class ScrollRectNoDragOnEnable : ModulePatch
     {
         protected override MethodBase GetTargetMethod()
         {
-            return typeof(ScrollRectNoDrag).GetMethod("OnEnable", BindingFlags.Instance | BindingFlags.NonPublic);
+            return typeof(ScrollRectNoDrag).GetMethod("OnEnable", BindingFlags.Instance | BindingFlags.Public);
         }
         [PatchPostfix]
         private static void PatchPostFix(ref ScrollRectNoDrag __instance)
@@ -720,7 +693,7 @@ namespace AmandsController
         [PatchPostfix]
         private static void PatchPostFix(ref SimpleStashPanel __instance)
         {
-            if (!Searching && (AmandsControllerPlugin.AmandsControllerClassComponent.InRaid || AmandsControllerPlugin.AmandsControllerClassComponent.ForceOutsideRaid)) ShowAsync(__instance);
+            if (!Searching && AmandsControllerPlugin.AmandsControllerClassComponent.InRaid) ShowAsync(__instance);
         }
         private async static void ShowAsync(SimpleStashPanel instance)
         {
@@ -749,46 +722,42 @@ namespace AmandsController
             Searching = false;
         }
     }
-    public class SimpleContextMenuButtonShowPatch : ModulePatch
+    public class ContextMenuButtonShowPatch : ModulePatch
     {
         protected override MethodBase GetTargetMethod()
         {
-            return typeof(SimpleContextMenuButton).GetMethod("Show", BindingFlags.Instance | BindingFlags.Public);
+            return typeof(ContextMenuButton).GetMethod("Show", BindingFlags.Instance | BindingFlags.Public);
         }
         [PatchPostfix]
-        private static void PatchPostFix(ref SimpleContextMenuButton __instance)
+        private static void PatchPostFix(ref ContextMenuButton __instance)
         {
-            if (AmandsControllerPlugin.AmandsControllerClassComponent.simpleContextMenuButtons.Contains(__instance)) return;
-            AmandsControllerPlugin.AmandsControllerClassComponent.simpleContextMenuButtons.Add(__instance);
+            if (AmandsControllerPlugin.AmandsControllerClassComponent.contextMenuButtons.Contains(__instance)) return;
+            SimpleContextMenu simpleContextMenu;
+            if (!__instance.transform.parent.parent.TryGetComponent<SimpleContextMenu>(out simpleContextMenu)) return;
+            AmandsControllerPlugin.AmandsControllerClassComponent.contextMenuButtons.Add(__instance);
             if (!AmandsControllerPlugin.AmandsControllerClassComponent.ContextMenu)
             {
                 AmandsControllerPlugin.AmandsControllerClassComponent.UpdateContextMenuBinds(true);
-                if ((AmandsControllerPlugin.AmandsControllerClassComponent.InRaid || AmandsControllerPlugin.AmandsControllerClassComponent.ForceOutsideRaid)) AmandsControllerPlugin.AmandsControllerClassComponent.ControllerUISelect(__instance);
-                //ControllerUIMoveAsync(__instance);
+                if (AmandsControllerPlugin.AmandsControllerClassComponent.InRaid) AmandsControllerPlugin.AmandsControllerClassComponent.ControllerUISelect(__instance);
             }
         }
-        /*private async static void ControllerUIMoveAsync(SimpleContextMenuButton instance)
-        {
-            await Task.Delay(100);
-            AmandsControllerPlugin.AmandsControllerClassComponent.ControllerUISelect(instance);
-        }*/
     }
-    public class SimpleContextMenuButtonClosePatch : ModulePatch
+    public class ContextMenuButtonClosePatch : ModulePatch
     {
         protected override MethodBase GetTargetMethod()
         {
-            return typeof(SimpleContextMenuButton).GetMethod("Close", BindingFlags.Instance | BindingFlags.Public);
+            return typeof(ContextMenuButton).GetMethod("Close", BindingFlags.Instance | BindingFlags.Public);
         }
         [PatchPostfix]
-        private static void PatchPostFix(ref SimpleContextMenuButton __instance)
+        private static void PatchPostFix(ref ContextMenuButton __instance)
         {
             if (__instance == null)
             {
                 goto Skip;
             }
-            AmandsControllerPlugin.AmandsControllerClassComponent.simpleContextMenuButtons.Remove(__instance);
+            AmandsControllerPlugin.AmandsControllerClassComponent.contextMenuButtons.Remove(__instance);
             Skip:
-            if (AmandsControllerPlugin.AmandsControllerClassComponent.simpleContextMenuButtons.Count == 0)
+            if (AmandsControllerPlugin.AmandsControllerClassComponent.contextMenuButtons.Count == 0)
             {
                 AmandsControllerPlugin.AmandsControllerClassComponent.UpdateContextMenuBinds(false);
             }
