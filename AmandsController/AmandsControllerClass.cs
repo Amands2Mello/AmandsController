@@ -9,156 +9,168 @@ using System;
 using System.Reflection;
 using EFT.InputSystem;
 using System.Threading.Tasks;
-using EFT.Interactive;
-using System.Security.Cryptography;
-using Mono.Security;
-using static EFT.Player;
 using EFT.UI.DragAndDrop;
 using UnityEngine.EventSystems;
 using Comfort.Common;
-using SharpDX;
 using EFT.Communications;
 using EFT.InventoryLogic;
-using Cutscene;
 using Diz.Binding;
-using System.Linq;
-using EFT.Hideout;
 using Aki.Common.Utils;
 using System.IO;
 using Newtonsoft.Json;
 using UnityEngine.Networking;
-using BepInEx;
 using TMPro;
+using EFT.Interactive;
+using System.Net;
+using UnityEngine.Rendering;
 
 namespace AmandsController
 {
     public class AmandsControllerClass : MonoBehaviour
     {
-        public InputTree inputTree;
+        // AmandsController
         public LocalPlayer localPlayer;
+        public InputTree inputTree;
+        public Player.FirearmController firearmController;
+        public bool InRaid = false;
 
-        public bool isAiming = false;
-
-        public object MovementContextObject;
-        public Type MovementContextType;
-        public MethodInfo SetCharacterMovementSpeed;
-        private object[] MovementInvokeParameters = new object[2] { 0.0, false };
-
-        public Slider speedSlider;
-
-        private MethodInfo TranslateInput;
-        private List<ECommand> commands = new List<ECommand>();
-        private object[] TranslateInputInvokeParameters = new object[3] { new List<ECommand>(), null, ECursorResult.Ignore };
-
-        private MethodInfo Press;
-
-        Controller controller;
-        Gamepad gamepad;
+        // SharpDX
+        public Controller controller;
+        public Gamepad gamepad;
         public bool connected = false;
         public float maxValue = short.MaxValue;
-        public Vector2 LS, RS, Aim = new Vector2(0, 0);
-        public float LTSensitivity, RTSensitivity, LSXYSqrt, RSXYSqrt;
-        public bool resetCharacterMovementSpeed = false;
-        public AnimationCurve AimAnimationCurve = new AnimationCurve();
-        public Keyframe[] AimKeys = new Keyframe[3] { new Keyframe(0f,0f), new Keyframe(0.75f,0.5f, 0.75f, 0.5f), new Keyframe(1f, 1f), };
+
+        // Inputs
+        public Vector2 LS, RS = Vector2.zero;
+        public float LSXYSqrt, RSXYSqrt;
+
+        public float LeftTrigger, RightTrigger;
+
+        public bool LSINPUT = false;
+        public bool LSUP = false;
+        public bool LSDOWN = false;
+        public bool LSLEFT = false;
+        public bool LSRIGHT = false;
+
+        public bool RSINPUT = false;
+        public bool RSUP = false;
+        public bool RSDOWN = false;
+        public bool RSLEFT = false;
+        public bool RSRIGHT = false;
+
+        public bool A = false;
+        public bool B = false;
+        public bool X = false;
+        public bool Y = false;
+
+        public bool LB = false;
+        public bool RB = false;
+
+        public bool RT = false;
+        public bool LT = false;
+
+        public bool R = false;
+        public bool L = false;
+
+        public bool UP = false;
+        public bool DOWN = false;
+        public bool LEFT = false;
+        public bool RIGHT = false;
+
+        public bool BACK = false;
+        public bool MENU = false;
+
+        // Custom Inputs
         public bool SlowLeanLeft;
         public bool SlowLeanRight;
 
-        bool LSINPUT = false;
-        bool LSUP = false;
-        bool LSDOWN = false;
-        bool LSLEFT = false;
-        bool LSRIGHT = false;
+        // Input Sets
+        public bool isAiming = false;
 
-        bool RSINPUT = false;
-        bool RSUP = false;
-        bool RSDOWN = false;
-        bool RSLEFT = false;
-        bool RSRIGHT = false;
+        public bool LB_RB = false;
+        public bool Interface_LB_RB = false;
 
-        bool A = false;
-        bool B = false;
-        bool X = false;
-        bool Y = false;
+        public bool Interface = false;
+        public bool ContextMenu = false;
 
-        bool LB = false;
-        bool RB = false;
-        bool LB_RB = false;
-        bool Interface_LB_RB = false;
+        // EFT Methods
+        private MethodInfo TranslateInput;
+        private object[] TranslateInputInvokeParameters = new object[3] { new List<ECommand>(), null, ECursorResult.Ignore };
+        private MethodInfo ButtonPress;
 
-        bool RT = false;
-        bool LT = false;
+        // Movement
+        private object MovementContextObject;
+        private Type MovementContextType;
+        private MethodInfo SetCharacterMovementSpeed;
+        private object[] MovementInvokeParameters = new object[2] { 0.0, false };
 
-        bool R = false;
-        bool L = false;
+        private bool resetCharacterMovementSpeed = false;
+        private float CharacterMovementSpeed = 0f;
+        private float StateSpeedLimit = 0f;
+        private float MaxSpeed = 0f;
 
-        bool UP = false;
-        bool DOWN = false;
-        bool LEFT = false;
-        bool RIGHT = false;
+        public Slider speedSlider;
 
-        bool BACK = false;
-        bool MENU = false;
+        // Aim
+        public Vector2 Aim = Vector2.zero;
+        private Vector2 InvertY = new Vector2(100f, -100f);
+        private AnimationCurve AimAnimationCurve = new AnimationCurve();
+        private Keyframe[] AimKeys = new Keyframe[3] { new Keyframe(0f, 0f), new Keyframe(0.75f, 0.5f, 0.75f, 0.5f), new Keyframe(1f, 1f), };
 
-        public delegate void AmandsControllerButtonState(EAmandsControllerButton Button, bool Pressed);
-        public static AmandsControllerButtonState onAmandsControllerButtonState;
+        // Aim Assist
+        private Collider[] colliders;
+        public int colliderCount;
+        public LayerMask AimAssistLayerMask = LayerMask.GetMask("Player");
 
-        float CharacterMovementSpeed = 0f;
-        float StateSpeedLimit = 0f;
-        float MaxSpeed = 0f;
+        public Dictionary<LocalPlayer, float> AimAssistPlayers = new Dictionary<LocalPlayer, float>();
+        private RaycastHit hit;
+        private LayerMask HighLayerMask = LayerMask.GetMask("Terrain", "HighPolyCollider");
 
-        AmandsControllerButtonBind EmptyBind = new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.None), EAmandsControllerPressType.Press, -100);
-        Dictionary<string,Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>> AmandsControllerSets = new Dictionary<string, Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>>();
+        private Vector2 ScreenSize = new Vector2(Screen.width, Screen.height);
+        private Vector2 ScreenSizeRatioMultiplier = new Vector2(1f, Screen.height / Screen.width);
+
+        private Vector3 AimPosition;
+        private Vector3 AimDirection;
+
+        private bool Magnetism;
+        private float Stickiness;
+        private float StickinessSmooth;
+        private Vector2 AutoAim = Vector2.zero;
+        private Vector2 AutoAimSmooth = Vector2.zero;
+
+        private float AimAssistAngle;
+        private float AimAssistBoneAngle;
+
+        private LocalPlayer AimAssistLocalPlayer = null;
+        private LocalPlayer HitAimAssistLocalPlayer = null;
+        private Vector2 AimAssistTarget2DPoint = Vector2.zero;
+        private Vector2 AimAssistScreenLocalPosition = Vector2.zero;
+
+        public SSAA currentSSAA;
+        public float SSAARatio;
+
+        // Binds
+        public ControllerPresetJsonClass controllerPresetJsonClass;
+
+        Dictionary<string, Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>> AmandsControllerSets = new Dictionary<string, Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>>();
         List<string> ActiveAmandsControllerSets = new List<string>();
 
         Dictionary<EAmandsControllerButton, AmandsControllerButtonSnapshot> AmandsControllerButtonSnapshots = new Dictionary<EAmandsControllerButton, AmandsControllerButtonSnapshot>();
         Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>> AmandsControllerButtonBinds = new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>();
+
         List<string> AsyncPress = new List<string>();
         List<string> AsyncHold = new List<string>();
 
-        public LayerMask AimAssistLayerMask = LayerMask.GetMask("Player");
-        public Dictionary<LocalPlayer, float> AimAssistPlayers = new Dictionary<LocalPlayer, float>();
+        AmandsControllerButtonBind EmptyBind = new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.None), EAmandsControllerPressType.Press, -100);
 
-        private RaycastHit hit;
-        private RaycastHit foliageHit;
-        private LayerMask LowLayerMask = LayerMask.GetMask("Terrain", "LowPolyCollider", "HitCollider");
-        private LayerMask HighLayerMask = LayerMask.GetMask("Terrain", "HighPolyCollider");
-        private LayerMask FoliageLayerMask = LayerMask.GetMask("Terrain", "HighPolyCollider", "HitCollider", "Foliage");
-        private Vector3 TargetLocal;
+        // UI
+        public InventoryScreen inventoryScreen;
 
-        private Collider[] colliders;
-        public int colliderCount;
-
-        public FirearmController firearmController;
-
-        private Vector2 ScreenSizeRatioMultiplier = new Vector2(1f, Screen.height / Screen.width);
-        private Vector2 ScreenSize = new Vector2(Screen.width, Screen.height);
-
-        private bool Magnetism;
-        private float Stickiness;
-        private Vector2 AutoAim;
-
-        private float StickinessSmooth;
-        private Vector2 AutoAimSmooth;
-
-        private float AimAssistAngle = 100000f;
-        private float AimAssistBoneAngle;
-        private LocalPlayer AimAssistLocalPlayer = null;
-        private Vector2 AimAssistTarget2DPoint;
-
-        private Vector2 AimAssistScreenLocalPosition;
-
-        private LocalPlayer HitAimAssistLocalPlayer;
-
-        // Controller UI
-
-        public EAmandsControllerCurrentUI CurrentUI = EAmandsControllerCurrentUI.None;
-
-        public List<GridView> gridViews = new List<GridView>(); // GridViews
+        public List<GridView> gridViews = new List<GridView>();
         public GridView SimpleStashGridView;
-        public TradingTableGridView tradingTableGridView; // Trading
-        public List<ContainedGridsView> containedGridsViews = new List<ContainedGridsView>(); // GridWindow
-        public List<ItemSpecificationPanel> itemSpecificationPanels = new List<ItemSpecificationPanel>(); // ItemSpecificationPanelWindow
+        public TradingTableGridView tradingTableGridView;
+        public List<ContainedGridsView> containedGridsViews = new List<ContainedGridsView>();
+        public List<ItemSpecificationPanel> itemSpecificationPanels = new List<ItemSpecificationPanel>();
 
         public List<SlotView> equipmentSlotViews = new List<SlotView>();
         public List<SlotView> weaponsSlotViews = new List<SlotView>();
@@ -172,11 +184,11 @@ namespace AmandsController
         public List<SlotView> specialSlotSlotViews = new List<SlotView>();
 
         public List<SearchButton> searchButtons = new List<SearchButton>();
+        public Image SearchButtonImage;
 
-        public List<SimpleContextMenuButton> simpleContextMenuButtons = new List<SimpleContextMenuButton>();
+        public List<ContextMenuButton> contextMenuButtons = new List<ContextMenuButton>();
 
         public SplitDialog splitDialog;
-
 
         public List<ScrollRectNoDrag> scrollRectNoDrags = new List<ScrollRectNoDrag>();
 
@@ -192,235 +204,133 @@ namespace AmandsController
         public SlotView currentDogtagSlotView;
         public SlotView currentSpecialSlotSlotView;
         public SearchButton currentSearchButton;
-        public SimpleContextMenuButton currentSimpleContextMenuButton;
+        public ContextMenuButton currentContextMenuButton;
         public ScrollRectNoDrag currentScrollRectNoDrag;
         public RectTransform currentScrollRectNoDragRectTransform;
 
-        public GridView snapshotGridView;
-        public ModSlotView snapshotModSlotView;
-        public TradingTableGridView snapshotTradingTableGridView;
-        public ContainedGridsView snapshotContainedGridsView;
-        public ItemSpecificationPanel snapshotItemSpecificationPanel;
-        public SlotView snapshotEquipmentSlotView;
-        public SlotView snapshotWeaponsSlotView;
-        public SlotView snapshotArmbandSlotView;
-        public SlotView snapshotContainersSlotView;
-        public SlotView snapshotDogtagSlotView;
-        public SlotView snapshotSpecialSlotSlotView;
-        public SearchButton snapshotSearchButton;
-        public SimpleContextMenuButton snapshotSimpleContextMenuButton;
-
+        private GridView snapshotGridView;
+        private ModSlotView snapshotModSlotView;
+        private TradingTableGridView snapshotTradingTableGridView;
+        private ContainedGridsView snapshotContainedGridsView;
+        private ItemSpecificationPanel snapshotItemSpecificationPanel;
+        private SlotView snapshotEquipmentSlotView;
+        private SlotView snapshotWeaponsSlotView;
+        private SlotView snapshotArmbandSlotView;
+        private SlotView snapshotContainersSlotView;
+        private SlotView snapshotDogtagSlotView;
+        private SlotView snapshotSpecialSlotSlotView;
+        private SearchButton snapshotSearchButton;
 
         public Vector2 globalPosition = Vector2.zero;
-        public Vector2 globalSize = Vector2.zero;
-        public Vector2 tglobalPosition = Vector2.zero;
-        public Vector2Int gridViewLocation = Vector2Int.one;
-        public Vector2Int SnapshotGridViewLocation = Vector2Int.one;
-        public Vector2Int lastDirection = Vector2Int.zero;
-        public Vector2 debugglobalPosition;
+        private Vector2 globalSize = Vector2.zero;
 
-        public List<Vector2> gridViewsDebug = new List<Vector2>();
-        public List<Vector2> slotViewsDebug = new List<Vector2>();
-
-        public Vector2 hitPointDebug = Vector2.zero;
-        public Vector2 hitDebug = Vector2.zero;
-        public Vector2 hitSizeDebug = Vector2.zero;
+        private Vector2Int gridViewLocation = Vector2Int.one;
+        private Vector2Int SnapshotGridViewLocation = Vector2Int.one;
 
         public float ScreenRatio = 1f;
         public float GridSize = 63f;
         public float ModSize = 63f;
         public float SlotSize = 124f;
 
-        Vector2 directiontest;
-
-        public Vector2 AimAssistDebugPoint1 = Vector2.zero;
-        public Vector2 AimAssistDebugPoint2 = Vector2.zero;
-        public Vector2 AimAssistDebugPoint3 = Vector2.zero;
-
-        //public ItemView itemView = null;
-        public ItemView DraggingItemView = null;
-        public PointerEventData pointerEventData = null;
-        public EventSystem eventSystem = null;
-        public bool Dragging = false;
-
-        public bool Interface = false;
-        public bool AutoMove = false;
-        public bool SplitDialogAutoMove = false;
-        public float AutoMoveTime = 0f;
-        public float AutoMoveTimeDelay = 0.2f;
-        public float InterfaceStickMoveTime = 0f;
-        public float InterfaceStickMoveTimeDelay = 0.3f;
-        public float InterfaceSkipStickMoveTime = 0f;
-        public float InterfaceSkipStickMoveTimeDelay = 0.3f;
-
-        public bool ContextMenu = false;
-
-        public MethodInfo ExecuteInteraction;
-        private object[] ExecuteInteractionInvokeParameters = new object[1] { EItemInfoButton.Inspect };
-        public MethodInfo IsInteractionAvailable;
-        private object[] IsInteractionAvailableInvokeParameters = new object[1] { EItemInfoButton.Inspect };
-        public MethodInfo ExecuteMiddleClick;
-
-        public MethodInfo QuickFindAppropriatePlace;
-        public MethodInfo CanExecute;
-        public MethodInfo RunNetworkTransaction;
-
-        public MethodInfo ItemUIContextMethod_0;
-        private object[] ItemUIContextMethod_0InvokeParameters = new object[2] { typeof(Item), EBoundItem.Item4 };
-
-        private ItemView onPointerEnterItemView;
-        private SimpleContextMenuButton onPointerEnterSimpleContextMenuButton;
-
-        public MethodInfo ShowContextMenu;
-        public object[] ShowContextMenuInvokeParameters = new object[1] { Vector2.zero };
-
-        public int lastIntSliderValue;
-
-        //public bool InRaidOnly = true;
-        public bool InRaid = false;
-
-        public MethodInfo CalculateRotatedSize;
-
         public bool LSButtons = false;
         public bool RSButtons = false;
+
         public EAmandsControllerUseStick InterfaceStick = EAmandsControllerUseStick.None;
         public EAmandsControllerUseStick InterfaceSkipStick = EAmandsControllerUseStick.RS;
         public EAmandsControllerUseStick ScrollStick = EAmandsControllerUseStick.LS;
         public EAmandsControllerUseStick WindowStick = EAmandsControllerUseStick.LS;
 
+        public Dictionary<InventoryScreen.EInventoryTab, Tab> Tabs = new Dictionary<InventoryScreen.EInventoryTab, Tab>();
+
+        // UI AutoMove
+        private bool AutoMove = false;
+        private bool SplitDialogAutoMove = false;
+
+        private float AutoMoveTime = 0f;
+        private float AutoMoveTimeDelay = 0.2f;
+
+        private float InterfaceStickMoveTime = 0f;
+        private float InterfaceStickMoveTimeDelay = 0.3f;
+
+        private float InterfaceSkipStickMoveTime = 0f;
+        private float InterfaceSkipStickMoveTimeDelay = 0.3f;
+
+        public Vector2Int lastDirection = Vector2Int.zero;
+        public int lastIntSliderValue;
+
+        // UI Pointer
+        private PointerEventData pointerEventData = null;
+        private EventSystem eventSystem = null;
+        private ItemView onPointerEnterItemView;
+
+        // UI Drag
+        public bool Dragging = false;
+        private ItemView DraggingItemView = null;
+
+        // UI Methods
+        private MethodInfo ExecuteInteraction;
+        private object[] ExecuteInteractionInvokeParameters = new object[1] { EItemInfoButton.Inspect };
+
+        private MethodInfo IsInteractionAvailable;
+        private object[] IsInteractionAvailableInvokeParameters = new object[1] { EItemInfoButton.Inspect };
+
+        private MethodInfo ExecuteMiddleClick;
+        private MethodInfo QuickFindAppropriatePlace;
+        private MethodInfo CanExecute;
+        private MethodInfo RunNetworkTransaction;
+        private MethodInfo CalculateRotatedSize;
+        private MethodInfo DraggedItemViewMethod_2;
+
+        private MethodInfo ItemUIContextMethod_0;
+        private object[] ItemUIContextMethod_0InvokeParameters = new object[2] { typeof(Item), EBoundItem.Item4 };
+
+        private MethodInfo ShowContextMenu;
+        private object[] ShowContextMenuInvokeParameters = new object[1] { Vector2.zero };
+
         public bool QuickSkipStick = false;
 
-        public MethodInfo DraggedItemViewMethod_2;
-
-        public ControllerPresetJsonClass controllerPresetJsonClass;
-
-        public static Dictionary<string, Sprite> LoadedSprites = new Dictionary<string, Sprite>();
-        public static Dictionary<string, AudioClip> LoadedAudioClips = new Dictionary<string, AudioClip>();
-
+        // UI Selected Box
         public GameObject SelectedGameObject;
         public RectTransform SelectedRectTransform;
         public Image SelectedImage;
         public LayoutElement SelectedLayoutElement;
 
-        public InventoryScreen inventoryScreen;
-
-        public bool DebugGlobalPosition = false;
-
-        public Image SearchButtonImage;
-
-        public Dictionary<InventoryScreen.EInventoryTab, Tab> Tabs = new Dictionary<InventoryScreen.EInventoryTab, Tab>();
-
-        public bool ForceOutsideRaid = false;
-
+        // UI Button Blocks
+        public delegate void AmandsControllerButtonState(EAmandsControllerButton Button, bool Pressed);
+        public static AmandsControllerButtonState onAmandsControllerButtonState;
         public GameObject AllGameObject;
-
         public Dictionary<EAmandsControllerButton, AmandsControllerButtonBlock> ButtonBlocks = new Dictionary<EAmandsControllerButton, AmandsControllerButtonBlock>();
 
-        public SSAA currentSSAA;
-        public float SSAARatio;
+        // Files
+        public static Dictionary<string, Sprite> LoadedSprites = new Dictionary<string, Sprite>();
+        public static Dictionary<string, AudioClip> LoadedAudioClips = new Dictionary<string, AudioClip>();
 
-        public void AmandsControllerButtonStateMethod(EAmandsControllerButton Button, bool Pressed)
-        {
-            if (ButtonBlocks.ContainsKey(Button) && ButtonBlocks[Button] != null) ButtonBlocks[Button].UpdateButtonPressed(Pressed);
-        }
-        public void AmandsControllerSetState(string AmandsControllerSet, bool Enabled)
-        {
-            UpdateAmandsControllerBlocks();
-        }
-        public void UpdateAmandsControllerBlocks()
-        {
-            foreach (KeyValuePair<EAmandsControllerButton, AmandsControllerButtonBlock> Block in ButtonBlocks)
-            {
-                if (Block.Value == null) continue;
-                bool PressValid = false;
-                bool HoldValid = false;
-                bool DoubleValid = false;
-                AmandsControllerButtonBind[] Binds = GetPriorityButtonBinds(Block.Key);
-                foreach (string Action in AmandsControllerGetButtonAction(Binds[0]))
-                {
-                    if (Action == "") continue;
-                    Block.Value.Press = Action;
-                    PressValid = true;
-                    break;
-                }
-                foreach (string Action in AmandsControllerGetButtonAction(Binds[2]))
-                {
-                    if (Action == "") continue;
-                    Block.Value.Hold = Action;
-                    HoldValid = true;
-                    break;
-                }
-                foreach (string Action in AmandsControllerGetButtonAction(Binds[3]))
-                {
-                    if (Action == "") continue;
-                    Block.Value.DoubleClick = Action;
-                    DoubleValid = true;
-                    break;
-                }
-                Block.Value.HoldGameObject.SetActive(HoldValid);
-                Block.Value.DoubleClickGameObject.SetActive(DoubleValid);
-                if (PressValid)
-                {
-                    Block.Value.gameObject.SetActive(true);
-                    Block.Value.UpdateCommands();
-                }
-                else
-                {
-                    Block.Value.gameObject.SetActive(false);
-                }
-            }
-        }
         public void OnGUI()
         {
             return;
-            //GUILayout.BeginArea(new Rect(AmandsControllerPlugin.DebugX.Value, AmandsControllerPlugin.DebugY.Value, 1280, 720));
             GUILayout.BeginArea(new Rect(20, 10, 1280, 720));
-            /*GUILayout.Label("leftThumb X " + leftThumb.x.ToString());
-            GUILayout.Label("leftThumb Y " + leftThumb.y.ToString()); 
-            GUILayout.Label("rightThumb X " + rightThumb.x.ToString());
-            GUILayout.Label("rightThumb Y " + rightThumb.y.ToString());
-            GUILayout.Label("leftThumbXYSqrt " + leftThumbXYSqrt.ToString());
-            GUILayout.Label("rightThumbXYSqrt " + rightThumbXYSqrt.ToString());
-            GUILayout.Label("Aim X " + Aim.x.ToString());
-            GUILayout.Label("Aim Y " + Aim.y.ToString());*/
-            /*foreach (KeyValuePair<LocalPlayer,float> AimAssistPlayer in AimAssistPlayers)
-            {
-                GUILayout.Label("AimAssistPlayer " + AimAssistPlayer.Key.Profile.Nickname + " Angle " + AimAssistPlayer.Value);
-            }
-            GUILayout.Label("AimAssistStrength " + AimAssistStrength.ToString());
-            if (AimAssistStrengthSmooth > 0.01)
-            {
-                GUILayout.Label("AimAssist " + AimAssistStrengthSmooth.ToString());
-            }*/
-
-            //GUILayout.Label("AimAssistAngle " + AimAssistAngle.ToString());
-            //GUILayout.Label("AimAssistBoneAngle " + AimAssistBoneAngle.ToString());
-            /*GUILayout.Label("Magnetism " + Magnetism.ToString());
-            GUILayout.Label("Stickness " + Stickiness.ToString());
-            GUILayout.Label("AutoAim.x " + AutoAim.x.ToString());
-            GUILayout.Label("AutoAim.y " + AutoAim.y.ToString());*/
 
             AmandsControllerButtonBind[] amandsControllerButtonBind = GetPriorityButtonBinds(EAmandsControllerButton.A);
 
-            List<string> Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[0]);
+            List<string> Actions = ControllerGetButtonAction(amandsControllerButtonBind[0]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("A " + Action);
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[1]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[1]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("A " + Action);
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[2]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[2]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("A " + Action + " (HOLD)");
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[3]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[3]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
@@ -429,25 +339,25 @@ namespace AmandsController
 
             amandsControllerButtonBind = GetPriorityButtonBinds(EAmandsControllerButton.X);
 
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[0]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[0]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("X " + Action);
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[1]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[1]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("X " + Action);
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[2]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[2]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("X " + Action + " (HOLD)");
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[3]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[3]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
@@ -456,25 +366,25 @@ namespace AmandsController
 
             amandsControllerButtonBind = GetPriorityButtonBinds(EAmandsControllerButton.Y);
 
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[0]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[0]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("Y " + Action);
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[1]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[1]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("Y " + Action);
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[2]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[2]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("Y " + Action + " (HOLD)");
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[3]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[3]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
@@ -483,25 +393,25 @@ namespace AmandsController
 
             amandsControllerButtonBind = GetPriorityButtonBinds(EAmandsControllerButton.B);
 
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[0]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[0]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("B " + Action);
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[1]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[1]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("B " + Action);
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[2]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[2]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("B " + Action + " (HOLD)");
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[3]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[3]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
@@ -510,25 +420,25 @@ namespace AmandsController
 
             amandsControllerButtonBind = GetPriorityButtonBinds(EAmandsControllerButton.UP);
 
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[0]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[0]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("UP " + Action);
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[1]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[1]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("UP " + Action);
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[2]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[2]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("UP " + Action + " (HOLD)");
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[3]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[3]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
@@ -537,25 +447,25 @@ namespace AmandsController
 
             amandsControllerButtonBind = GetPriorityButtonBinds(EAmandsControllerButton.DOWN);
 
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[0]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[0]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("DOWN " + Action);
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[1]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[1]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("DOWN " + Action);
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[2]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[2]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("DOWN " + Action + " (HOLD)");
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[3]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[3]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
@@ -564,25 +474,25 @@ namespace AmandsController
 
             amandsControllerButtonBind = GetPriorityButtonBinds(EAmandsControllerButton.LEFT);
 
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[0]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[0]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("LEFT " + Action);
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[1]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[1]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("LEFT " + Action);
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[2]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[2]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("LEFT " + Action + " (HOLD)");
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[3]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[3]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
@@ -591,25 +501,25 @@ namespace AmandsController
 
             amandsControllerButtonBind = GetPriorityButtonBinds(EAmandsControllerButton.RIGHT);
 
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[0]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[0]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("RIGHT " + Action);
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[1]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[1]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("RIGHT " + Action);
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[2]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[2]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
                 GUILayout.Label("RIGHT " + Action + " (HOLD)");
             }
-            Actions = AmandsControllerGetButtonAction(amandsControllerButtonBind[3]);
+            Actions = ControllerGetButtonAction(amandsControllerButtonBind[3]);
             foreach (string Action in Actions)
             {
                 if (Action == "") continue;
@@ -621,342 +531,53 @@ namespace AmandsController
 
 
             GUIContent gUIContent = new GUIContent();
-            if (DebugGlobalPosition && InRaid && Interface && currentSimpleContextMenuButton == null)
+            if (InRaid && Interface && currentContextMenuButton == null)
             {
                 GUI.Box(new Rect(new Vector2(globalPosition.x - (GridSize / 2), (Screen.height) - globalPosition.y - (GridSize / 2)), new Vector2(GridSize, GridSize)), gUIContent);
-                //GUI.Box(new Rect(new Vector2(debugglobalPosition.x, (Screen.height) - debugglobalPosition.y), new Vector2(GridSize, GridSize)), gUIContent);
             }
-            /*RectTransform rectTransform;
-            foreach (SlotView specialSlotSlotView in specialSlotSlotViews)
+            if (InRaid && Interface && currentScrollRectNoDrag != null && currentScrollRectNoDragRectTransform != null)
             {
-                rectTransform = specialSlotSlotView.GetComponent<RectTransform>();
-                GUI.Box(new Rect(new Vector2(rectTransform.position.x, (Screen.height) - rectTransform.position.y), new Vector2(GridSize, GridSize)), gUIContent);
-            }*/
-            /*RectTransform rectTransform;
-            foreach (ScrollRectNoDrag scrollRectNoDrag in scrollRectNoDrags)
-            {
-                rectTransform = scrollRectNoDrag.GetComponent<RectTransform>();
-                rectTransform = scrollRectNoDrag.content;
-                //GUI.Box(new Rect(new Vector2(rectTransform.position.x - ((1 - rectTransform.pivot.x) * rectTransform.rect.width), (Screen.height) - (rectTransform.position.y + ((1 - rectTransform.pivot.y) * rectTransform.rect.height))), new Vector2(rectTransform.rect.width, rectTransform.rect.height)), gUIContent);
-                GUI.Box(new Rect(new Vector2(rectTransform.position.x + rectTransform.rect.x, (Screen.height) - (rectTransform.position.y - (rectTransform.rect.height * (rectTransform.pivot.y - 1f)))), new Vector2(rectTransform.rect.width, rectTransform.rect.height)), gUIContent);
-            }*/
-            /*GUI.Box(new Rect(new Vector2(AimAssistDebugPoint1.x, (Screen.height) - AimAssistDebugPoint1.y), new Vector2(0,0)), gUIContent);
-            GUI.Box(new Rect(new Vector2(AimAssistDebugPoint2.x, (Screen.height) - AimAssistDebugPoint2.y), new Vector2(0, 0)), gUIContent);
-            GUI.Box(new Rect(new Vector2(AimAssistDebugPoint3.x, (Screen.height) - AimAssistDebugPoint3.y), new Vector2(0, 0)), gUIContent);*/
-
-            // Controller UI
-
-            // Debug Removal Start 1 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-            /*GUILayout.BeginArea(new Rect(20, 20, 1280, 720));
-            if (gridViews != null)
-            {
-                GUILayout.Label("GridViews.Count " + gridViews.Count);
-            }
-            if (tradingTableGridView != null)
-            {
-                GUILayout.Label("tradingTableGridView.Count" + (tradingTableGridView != null ? "1" : "0"));
-            }
-            if (containedGridsViews != null)
-            {
-                GUILayout.Label("containedGridsViews.Count " + containedGridsViews.Count);
-            }
-            if (itemSpecificationPanels != null)
-            {
-                GUILayout.Label("itemSpecificationPanels.Count " + itemSpecificationPanels.Count);
-            }
-            if (equipmentSlotViews != null)
-            {
-                GUILayout.Label("equipmentSlotViews.Count " + equipmentSlotViews.Count);
-            }
-            if (weaponsSlotViews != null)
-            {
-                GUILayout.Label("weaponsSlotViews.Count " + weaponsSlotViews.Count);
-            }
-            if (armbandSlotView != null)
-            {
-                GUILayout.Label("armbandSlotView.Count " + (armbandSlotView != null ? "1" : "0"));
-            }
-            if (containersSlotViews != null)
-            {
-                GUILayout.Label("containersSlotViews.Count " + containersSlotViews.Count);
-            }
-            if (lootEquipmentSlotViews != null)
-            {
-                GUILayout.Label("lootEquipmentSlotViews.Count " + lootEquipmentSlotViews.Count);
-            }
-            if (lootWeaponsSlotViews != null)
-            {
-                GUILayout.Label("lootWeaponsSlotViews.Count " + lootWeaponsSlotViews.Count);
-            }
-            if (lootArmbandSlotView != null)
-            {
-                GUILayout.Label("lootArmbandSlotView.Count " + (lootArmbandSlotView != null ? "1" : "0"));
-            }
-            if (lootContainersSlotViews != null)
-            {
-                GUILayout.Label("lootContainersSlotViews.Count " + lootContainersSlotViews.Count);
-            }
-            if (searchButtons != null)
-            {
-                GUILayout.Label("searchButtons.Count " + searchButtons.Count);
-            }
-            GUILayout.Label("currentGridView " + ((currentGridView != null && currentGridView.gameObject.activeSelf)));
-            GUILayout.Label("currentTradingTableGridView " + ((currentTradingTableGridView != null && currentTradingTableGridView.gameObject.activeSelf)));
-            GUILayout.Label("currentContainedGridsView " + (currentContainedGridsView != null));
-            GUILayout.Label("currentEquipmentSlotView " + ((currentEquipmentSlotView != null && currentEquipmentSlotView.gameObject.activeSelf)));
-            GUILayout.Label("currentWeaponsSlotView " + ((currentWeaponsSlotView != null && currentWeaponsSlotView.gameObject.activeSelf)));
-            GUILayout.Label("currentArmbandSlotView " + ((currentArmbandSlotView != null && currentArmbandSlotView.gameObject.activeSelf)));
-            GUILayout.Label("currentContainersSlotView " + ((currentContainersSlotView != null && currentContainersSlotView.gameObject.activeSelf)));
-            GUILayout.Label("currentItemSpecificationPanel " + (currentItemSpecificationPanel != null));
-            GUILayout.Label("currentSearchButton " + ((currentSearchButton != null && currentSearchButton.gameObject.activeSelf)));
-            if ((currentGridView != null && currentGridView.gameObject.activeSelf))
-            {
-                GUILayout.Label("Current " + "GridView");
-            }
-            if ((currentModSlotView != null && currentModSlotView.gameObject.activeSelf))
-            {
-                GUILayout.Label("Current " + "ModSlotView");
-            }
-            if ((currentTradingTableGridView != null && currentTradingTableGridView.gameObject.activeSelf))
-            {
-                GUILayout.Label("Current " + "TradingTable");
-            }
-            if (currentItemSpecificationPanel != null)
-            {
-                GUILayout.Label("Current " + "ItemSpecificationPanel");
-            }
-            if (currentContainedGridsView != null)
-            {
-                GUILayout.Label("Current " + "Contained");
-            }
-            if ((currentEquipmentSlotView != null && currentEquipmentSlotView.gameObject.activeSelf))
-            {
-                GUILayout.Label("Current " + "Equipment");
-            }
-            if ((currentWeaponsSlotView != null && currentWeaponsSlotView.gameObject.activeSelf))
-            {
-                GUILayout.Label("Current " + "Weapons");
-            }
-            if ((currentArmbandSlotView != null && currentArmbandSlotView.gameObject.activeSelf))
-            {
-                GUILayout.Label("Current " + "Armband");
-            }
-            if ((currentContainersSlotView != null && currentContainersSlotView.gameObject.activeSelf))
-            {
-                GUILayout.Label("Current " + "Containers");
-            }
-            if (localPlayer != null)
-            {
-                GUILayout.Label("localPlayer " + "true");
-            }
-            if ((currentSearchButton != null && currentSearchButton.gameObject.activeSelf))
-            {
-                GUILayout.Label("currentSearchButton " + "true");
-            }
-            GUILayout.EndArea();
-
-            GUIContent gUIContent = new GUIContent();
-            GUIContent gUIContentText = new GUIContent();
-            gUIContentText.text = "Sel";
-            GUIContent gUIContentText3 = new GUIContent();
-            gUIContentText3.text = "Hit";
-            GUIContent gUIContentText4 = new GUIContent();
-            gUIContentText4.text = "HitPoint";
-
-            GUIContent gUIContentGridView = new GUIContent();
-            gUIContentGridView.text = "GridView";
-
-            GUIContent gUIContentPanel = new GUIContent();
-            gUIContentPanel.text = "Panel";*/
-
-            // Debug Removal End 1 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-
-            /*foreach (GridView gridView in gridViews)
-            {
-                Vector2 position;
-                position.x = gridView.transform.position.x;
-                position.y = gridView.transform.position.y;
-                GUI.Box(new Rect(new Vector2(position.x, (Screen.height) - position.y), gridView.GetComponent<RectTransform>().sizeDelta), gUIContentGridView);
-            }
-            foreach (ContainedGridsView containedGridsView in containedGridsViews)
-            {
-                GUI.Box(new Rect(new Vector2(containedGridsView.transform.position.x, (Screen.height) - (containedGridsView.transform.position.y - (containedGridsView.GetComponent<RectTransform>().sizeDelta.y * (containedGridsView.GetComponent<RectTransform>().pivot.y - 1f)))), containedGridsView.GetComponent<RectTransform>().sizeDelta), gUIContentcontainedGridsView);
-                foreach (GridView gridView in containedGridsView.GridViews)
+                float height = currentScrollRectNoDrag.content.rect.height;
+                Vector2 position = new Vector2(currentScrollRectNoDragRectTransform.position.x + (currentScrollRectNoDragRectTransform.rect.x * ScreenRatio), currentScrollRectNoDragRectTransform.position.y - ((currentScrollRectNoDragRectTransform.rect.height * (currentScrollRectNoDragRectTransform.pivot.y - 1f)) * ScreenRatio));
+                /*if (globalPosition.x > position.x && globalPosition.x < (position.x + (currentScrollRectNoDragRectTransform.rect.width * ScreenRatio)))
                 {
-                    GUI.Box(new Rect(new Vector2(gridView.transform.position.x, (Screen.height) - gridView.transform.position.y), gridView.GetComponent<RectTransform>().sizeDelta), gUIContentGridView);
-                }
-            }
-            if (tradingTableGridView != null)
-            {
-                Vector2 position;
-                position.x = tradingTableGridView.transform.position.x - (tradingTableGridView.GetComponent<RectTransform>().sizeDelta.x / 2f);
-                position.y = tradingTableGridView.transform.position.y + (tradingTableGridView.GetComponent<RectTransform>().sizeDelta.y / 2f);
-                GUI.Box(new Rect(new Vector2(position.x, (Screen.height) - position.y), tradingTableGridView.GetComponent<RectTransform>().sizeDelta), gUIContenttradingTableGridView);
-            }
-            foreach (Vector2 pos in gridViewsDebug)
-            {
-                GUI.Box(new Rect(new Vector2(pos.x - (GridSize / 2), (Screen.height) - pos.y - (GridSize / 2)), new Vector2(GridSize, GridSize)), gUIContentText);
-            }
-            RectTransform rectTransform;
-
-            if (itemSpecificationPanels.Count != 0)
-            {
-                Vector2 position;
-                int bestDepth = -1;
-                CanvasRenderer canvasRenderer;
-                ItemSpecificationPanel bestItemSpecificationPanel = null;
-                foreach (ItemSpecificationPanel itemSpecificationPanel in itemSpecificationPanels)
-                {
-                    rectTransform = itemSpecificationPanel.GetComponent<RectTransform>();
-                    position = new Vector2(itemSpecificationPanel.transform.position.x - ((rectTransform.sizeDelta.x / 2) * ScreenRatio), itemSpecificationPanel.transform.position.y + ((rectTransform.sizeDelta.y / 2) * ScreenRatio));
-                    if (Input.mousePosition.x > position.x && Input.mousePosition.x < (position.x + (rectTransform.sizeDelta.x * ScreenRatio)) && Input.mousePosition.y < position.y && Input.mousePosition.y > (position.y - (rectTransform.sizeDelta.y * ScreenRatio)))
+                    if ((globalPosition.y + (GridSize / 2f)) > position.y)
                     {
-                        canvasRenderer = itemSpecificationPanel.GetComponent<CanvasRenderer>();
-                        if (canvasRenderer != null && canvasRenderer.absoluteDepth > bestDepth)
+                        currentScrollRectNoDrag.verticalNormalizedPosition = currentScrollRectNoDrag.verticalNormalizedPosition + (((1000f / height) / height) * 10000f * Time.deltaTime * AmandsControllerPlugin.ScrollSensitivity.Value);
+                        UpdateGlobalPosition();
+                        if (!((globalPosition.y + (GridSize / 2f)) > position.y) && !((globalPosition.y - (GridSize / 2f)) < (position.y - (currentScrollRectNoDragRectTransform.rect.height * ScreenRatio))))
                         {
-                            bestDepth = canvasRenderer.absoluteDepth;
-                            bestItemSpecificationPanel = itemSpecificationPanel;
+                            ControllerUIOnMove(Vector2Int.zero, globalPosition);
                         }
                     }
-                }
-                if (bestItemSpecificationPanel != null)
-                {
-                    GUI.Box(new Rect(new Vector2(bestItemSpecificationPanel.transform.position.x - ((bestItemSpecificationPanel.GetComponent<RectTransform>().sizeDelta.x / 2) * ScreenRatio), (Screen.height) - (bestItemSpecificationPanel.transform.position.y + ((bestItemSpecificationPanel.GetComponent<RectTransform>().sizeDelta.y / 2) * ScreenRatio))), bestItemSpecificationPanel.GetComponent<RectTransform>().sizeDelta), gUIContentPanel);
-                    ModSlotView[] modSlotViews = Traverse.Create(bestItemSpecificationPanel).Field("_modsContainer").GetValue<RectTransform>().GetComponentsInChildren<ModSlotView>();
-                    DebugStuff("count " + modSlotViews.Count());
-                    foreach (ModSlotView modSlotView in modSlotViews)
+                    else if ((globalPosition.y - (GridSize / 2f)) < (position.y - (currentScrollRectNoDragRectTransform.rect.height * ScreenRatio)))
                     {
-                        GUI.Box(new Rect(new Vector2(modSlotView.transform.position.x - (32f * ScreenRatio), (Screen.height) - (modSlotView.transform.position.y + (32f * ScreenRatio))), new Vector2(64,64)), gUIContent);
-                    }
-                }
-            }*/
-
-            // Debug Removal Start 2 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-            /*if ((currentGridView != null && currentGridView.gameObject.activeSelf))
-            {
-                Vector2 position;
-                position.x = currentGridView.transform.position.x;
-                position.y = currentGridView.transform.position.y;
-                GUI.Box(new Rect(new Vector2(position.x, (Screen.height) - position.y), currentGridView.GetComponent<RectTransform>().sizeDelta), gUIContentGridView);
-            }
-            foreach (SlotView slotView in equipmentSlotViews)
-            {
-                Vector2 position;
-                position.x = slotView.transform.position.x;// - 62.5f;
-                position.y = slotView.transform.position.y;
-                GUI.Box(new Rect(new Vector2(position.x, (Screen.height) - position.y), new Vector2(125f, 125f)), gUIContent);
-            }
-            foreach (SlotView slotView in weaponsSlotViews)
-            {
-                Vector2 position;
-                position.x = slotView.transform.position.x;// - 157.0811f;
-                position.y = slotView.transform.position.y;
-                GUI.Box(new Rect(new Vector2(position.x, (Screen.height) - position.y), new Vector2(314.1622f,125f)), gUIContent);
-            }
-            if (armbandSlotView != null)
-            {
-                GUI.Box(new Rect(new Vector2(armbandSlotView.transform.position.x, (Screen.height) - armbandSlotView.transform.position.y), new Vector2(125f, 64f)), gUIContent);// - 62.5f, (Screen.height) - armbandSlotView.transform.position.y), new Vector2(125f, 64f)), gUIContent);
-            }
-            foreach (SlotView slotView in containersSlotViews)
-            {
-                Vector2 position;
-                position.x = slotView.transform.position.x;
-                position.y = slotView.transform.position.y;
-                GUI.Box(new Rect(new Vector2(position.x, (Screen.height) - position.y), new Vector2(125f, 125f)), gUIContent);
-            }
-            foreach (SlotView slotView in lootEquipmentSlotViews)
-            {
-                Vector2 position;
-                position.x = slotView.transform.position.x;// - 62.5f;
-                position.y = slotView.transform.position.y;
-                GUI.Box(new Rect(new Vector2(position.x, (Screen.height) - position.y), new Vector2(125f, 125f)), gUIContent);
-            }
-            foreach (SlotView slotView in lootWeaponsSlotViews)
-            {
-                Vector2 position;
-                position.x = slotView.transform.position.x;// - 133.0724f;
-                position.y = slotView.transform.position.y;
-                GUI.Box(new Rect(new Vector2(position.x, (Screen.height) - position.y), new Vector2(314.1622f, 125f)), gUIContent);
-            }
-            if (lootArmbandSlotView != null)
-            {
-                GUI.Box(new Rect(new Vector2(lootArmbandSlotView.transform.position.x, (Screen.height) - lootArmbandSlotView.transform.position.y), new Vector2(125f, 64f)), gUIContent);
-            }
-            foreach (SlotView slotView in lootContainersSlotViews)
-            {
-                Vector2 position;
-                position.x = slotView.transform.position.x;
-                position.y = slotView.transform.position.y;
-                GUI.Box(new Rect(new Vector2(position.x, (Screen.height) - position.y), new Vector2(125f, 125f)), gUIContent);
-            }
-            GUI.Box(new Rect(new Vector2(globalPosition.x - (GridSize / 2), (Screen.height) - globalPosition.y - (GridSize / 2)), new Vector2(GridSize, GridSize)), gUIContentText);
-            //GUI.Box(new Rect(new Vector2(hitDebug.x, (Screen.height) - hitDebug.y), hitSizeDebug), gUIContentText3);
-            //GUI.Box(new Rect(new Vector2(hitPointDebug.x, (Screen.height) - hitPointDebug.y), new Vector2(64, 32)), gUIContentText4);
-
-            GUI.Box(new Rect(new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y), new Vector2(GridSize, GridSize)), gUIContent);
-            foreach (ItemSpecificationPanel itemSpecificationPanel in itemSpecificationPanels)
-            {
-                //GUI.Box(new Rect(new Vector2(itemSpecificationPanel.transform.position.x - (itemSpecificationPanel.GetComponent<RectTransform>().sizeDelta.x / 2), (Screen.height) - (itemSpecificationPanel.transform.position.y - (itemSpecificationPanel.GetComponent<RectTransform>().sizeDelta.y * (itemSpecificationPanel.GetComponent<RectTransform>().pivot.y - 1f)))), itemSpecificationPanel.GetComponent<RectTransform>().sizeDelta), gUIContentPanel);
-                Vector2 point = (Vector2)Input.mousePosition + (directiontest * 1000f);
-                RectTransform rectTransform2 = itemSpecificationPanel.GetComponent<RectTransform>();
-                Vector2 position = Vector2.zero;
-                position.x = itemSpecificationPanel.transform.position.x - (rectTransform2.sizeDelta.x / 2);
-                position.y = itemSpecificationPanel.transform.position.y + (rectTransform2.sizeDelta.y / 2);
-                GUI.Box(new Rect(new Vector2(position.x + Mathf.Clamp(point.x - position.x, 0, rectTransform2.sizeDelta.x), Screen.height - (position.y - Mathf.Clamp(position.y - point.y, 0, rectTransform2.sizeDelta.y))), new Vector2(GridSize, GridSize)), gUIContent);
-            }
-            foreach (ContainedGridsView containedGridsView in containedGridsViews)
-            {
-                GUI.Box(new Rect(new Vector2(containedGridsView.transform.position.x, (Screen.height) - (containedGridsView.transform.position.y - (containedGridsView.GetComponent<RectTransform>().sizeDelta.y * (containedGridsView.GetComponent<RectTransform>().pivot.y - 1f)))), containedGridsView.GetComponent<RectTransform>().sizeDelta), gUIContent);
-            }
-            RectTransform rectTransform;
-            if (itemSpecificationPanels.Count != 0)
-            {
-                Vector2 position;
-                int bestDepth = -1;
-                CanvasRenderer canvasRenderer;
-                ItemSpecificationPanel bestItemSpecificationPanel = null;
-                foreach (ItemSpecificationPanel itemSpecificationPanel in itemSpecificationPanels)
-                {
-                    rectTransform = itemSpecificationPanel.GetComponent<RectTransform>();
-                    position = new Vector2(itemSpecificationPanel.transform.position.x - ((rectTransform.sizeDelta.x / 2) * ScreenRatio), itemSpecificationPanel.transform.position.y + ((rectTransform.sizeDelta.y / 2) * ScreenRatio));
-                    if (Input.mousePosition.x > position.x && Input.mousePosition.x < (position.x + (rectTransform.sizeDelta.x * ScreenRatio)) && Input.mousePosition.y < position.y && Input.mousePosition.y > (position.y - (rectTransform.sizeDelta.y * ScreenRatio)))
-                    {
-                        canvasRenderer = itemSpecificationPanel.GetComponent<CanvasRenderer>();
-                        if (canvasRenderer != null && canvasRenderer.absoluteDepth > bestDepth)
+                        currentScrollRectNoDrag.verticalNormalizedPosition = currentScrollRectNoDrag.verticalNormalizedPosition + (((-1000f / height) / height) * 10000f * Time.deltaTime * AmandsControllerPlugin.ScrollSensitivity.Value);
+                        UpdateGlobalPosition();
+                        if (!((globalPosition.y + (GridSize / 2f)) > position.y) && !((globalPosition.y - (GridSize / 2f)) < (position.y - (currentScrollRectNoDragRectTransform.rect.height * ScreenRatio))))
                         {
-                            bestDepth = canvasRenderer.absoluteDepth;
-                            bestItemSpecificationPanel = itemSpecificationPanel;
+                            ControllerUIOnMove(Vector2Int.zero, globalPosition);
                         }
                     }
-                }
-                if (bestItemSpecificationPanel != null)
-                {
-                    GUI.Box(new Rect(new Vector2(bestItemSpecificationPanel.transform.position.x - ((bestItemSpecificationPanel.GetComponent<RectTransform>().sizeDelta.x / 2) * ScreenRatio), (Screen.height) - (bestItemSpecificationPanel.transform.position.y + ((bestItemSpecificationPanel.GetComponent<RectTransform>().sizeDelta.y / 2) * ScreenRatio))), bestItemSpecificationPanel.GetComponent<RectTransform>().sizeDelta), gUIContentPanel);
-                    ModSlotView[] modSlotViews = Traverse.Create(bestItemSpecificationPanel).Field("_modsContainer").GetValue<RectTransform>().GetComponentsInChildren<ModSlotView>();
-                    foreach (ModSlotView modSlotView in modSlotViews)
-                    {
-                        GUI.Box(new Rect(new Vector2(modSlotView.transform.position.x - (32f * ScreenRatio), (Screen.height) - (modSlotView.transform.position.y + (32f * ScreenRatio))), new Vector2(64, 64)), gUIContent);
-                    }
-                }
+                }*/
+                GUI.Box(new Rect(new Vector2(position.x, (Screen.height) - position.y), new Vector2(currentScrollRectNoDragRectTransform.rect.width * ScreenRatio, currentScrollRectNoDragRectTransform.rect.height * ScreenRatio)), gUIContent);
             }
-            foreach (SearchButton searchButton in searchButtons)
-            {
-                Vector2 position;
-                rectTransform = searchButton.GetComponent<RectTransform>();
-                position.x = searchButton.transform.position.x;// - (rectTransform.sizeDelta.x / 2);
-                position.y = searchButton.transform.position.y;// - (rectTransform.sizeDelta.y / 2);
-                GUI.Box(new Rect(new Vector2(position.x, (Screen.height) - position.y), new Vector2(10, 10)), gUIContent);
-            }*/
-
-            // Debug Removal End 2 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-            //GUI.Box(new Rect(new Vector2(tglobalPosition.x - 1, (Screen.height) - tglobalPosition.y + 1), new Vector2(2, 2)), gUIContentText);
         }
         public void Start()
         {
+            ItemUIContextMethod_0 = typeof(ItemUiContext).GetMethod("method_0", BindingFlags.Instance | BindingFlags.Public);
+            TranslateInput = typeof(InputTree).GetMethod("TranslateInput", BindingFlags.Instance | BindingFlags.Public);
+            ButtonPress = typeof(Button).GetMethod("Press", BindingFlags.Instance | BindingFlags.NonPublic);
+            ExecuteMiddleClick = typeof(ItemView).GetMethod("ExecuteMiddleClick", BindingFlags.Instance | BindingFlags.Public);
+            QuickFindAppropriatePlace = typeof(ItemUiContext).GetMethod("QuickFindAppropriatePlace", BindingFlags.Instance | BindingFlags.Public);
+            CanExecute = typeof(TraderControllerClass).GetMethod("CanExecute", BindingFlags.Instance | BindingFlags.Public);
+            RunNetworkTransaction = typeof(TraderControllerClass).GetMethod("RunNetworkTransaction", BindingFlags.Instance | BindingFlags.Public);
+            ShowContextMenu = typeof(ItemView).GetMethod("ShowContextMenu", BindingFlags.Instance | BindingFlags.Public);
+            CalculateRotatedSize = typeof(Item).GetMethod("CalculateRotatedSize", BindingFlags.Instance | BindingFlags.Public);
+            DraggedItemViewMethod_2 = typeof(DraggedItemView).GetMethod("method_2", BindingFlags.Instance | BindingFlags.Public);
+
+            onAmandsControllerButtonState += ControllerButtonStateMethod;
+
             if (!File.Exists((AppDomain.CurrentDomain.BaseDirectory + "/BepInEx/plugins/Controller/Default.json")))
             {
                 DefaultJSON();
@@ -966,58 +587,29 @@ namespace AmandsController
                 controllerPresetJsonClass = ReadFromJsonFile<ControllerPresetJsonClass>((AppDomain.CurrentDomain.BaseDirectory + "/BepInEx/plugins/Controller/Default.json"));
             }
 
-            ItemUIContextMethod_0 = typeof(ItemUiContext).GetMethod("method_0", BindingFlags.Instance | BindingFlags.NonPublic);
-            TranslateInput = typeof(InputTree).GetMethod("TranslateInput", BindingFlags.Instance | BindingFlags.NonPublic);
-            Press = typeof(Button).GetMethod("Press", BindingFlags.Instance | BindingFlags.NonPublic);
-            ExecuteMiddleClick = typeof(ItemView).GetMethod("ExecuteMiddleClick", BindingFlags.Instance | BindingFlags.NonPublic);
-            QuickFindAppropriatePlace = typeof(ItemUiContext).GetMethod("QuickFindAppropriatePlace", BindingFlags.Instance | BindingFlags.Public);
-            CanExecute = typeof(TraderControllerClass).GetMethod("CanExecute", BindingFlags.Instance | BindingFlags.Public);
-            RunNetworkTransaction = typeof(TraderControllerClass).GetMethod("RunNetworkTransaction", BindingFlags.Instance | BindingFlags.Public);
-            ShowContextMenu = typeof(ItemView).GetMethod("ShowContextMenu", BindingFlags.Instance | BindingFlags.NonPublic);
-            CalculateRotatedSize = typeof(Item).GetMethod("CalculateRotatedSize", BindingFlags.Instance | BindingFlags.Public);
-            DraggedItemViewMethod_2 = typeof(DraggedItemView).GetMethod("method_2", BindingFlags.Instance | BindingFlags.NonPublic);
-
             AimAnimationCurve.keys = AimKeys;
 
             ReloadFiles();
 
-            onAmandsControllerButtonState += AmandsControllerButtonStateMethod;
+            AmandsControllerPlugin.BlockPosition.SettingChanged += BlockPositionUpdated;
+            AmandsControllerPlugin.UserIndex.SettingChanged += UserIndexUpdated;
         }
         public void Update()
         {
-            //if (Input.GetKeyDown(KeyCode.PageUp))
-            //{
-            //    //DebugGlobalPosition = true;
-            //    /*InRaidOnly = false;
-            //    UpdateController(null);
-            //    UpdateInterfaceBinds(true);*/
-            //    UpdateController(null);
-            //    UpdateInterfaceBinds(true);
-            //    ForceOutsideRaid = true;
-            //}
-            //if (Input.GetKeyDown(KeyCode.PageDown))
-            //{
-            //    //DebugGlobalPosition = false;
-            //    /*InRaidOnly = true;
-            //    connected = false;*/
-            //    UpdateInterfaceBinds(false);
-            //    ForceOutsideRaid = false;
-            //}
-
             if (!connected) return;
 
             InRaid = localPlayer != null;
 
-            if (!ForceOutsideRaid && !InRaid) return;
+            if (!InRaid) return;
 
             gamepad = controller.GetState().Gamepad;
 
-            if (LTSensitivity > 0.25)
+            if (LeftTrigger > AmandsControllerPlugin.LTDeadzone.Value)
             {
                 if (!LT)
                 {
                     LT = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.LT, true);
+                    GeneratePressType(EAmandsControllerButton.LT, true);
                 }
             }
             else
@@ -1025,15 +617,15 @@ namespace AmandsController
                 if (LT)
                 {
                     LT = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.LT, false);
+                    GeneratePressType(EAmandsControllerButton.LT, false);
                 }
             }
-            if (RTSensitivity > 0.25)
+            if (RightTrigger > AmandsControllerPlugin.RTDeadzone.Value)
             {
                 if (!RT)
                 {
                     RT = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.RT, true);
+                    GeneratePressType(EAmandsControllerButton.RT, true);
                 }
             }
             else
@@ -1041,7 +633,7 @@ namespace AmandsController
                 if (RT)
                 {
                     RT = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.RT, false);
+                    GeneratePressType(EAmandsControllerButton.RT, false);
                 }
             }
             if (gamepad.Buttons.HasFlag(GamepadButtonFlags.A))
@@ -1049,7 +641,7 @@ namespace AmandsController
                 if (!A)
                 {
                     A = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.A, true);
+                    GeneratePressType(EAmandsControllerButton.A, true);
 
                 }
             }
@@ -1058,7 +650,7 @@ namespace AmandsController
                 if (A)
                 {
                     A = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.A, false);
+                    GeneratePressType(EAmandsControllerButton.A, false);
                 }
             }
             if (gamepad.Buttons.HasFlag(GamepadButtonFlags.B))
@@ -1066,7 +658,7 @@ namespace AmandsController
                 if (!B)
                 {
                     B = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.B, true);
+                    GeneratePressType(EAmandsControllerButton.B, true);
                 }
             }
             else
@@ -1074,7 +666,7 @@ namespace AmandsController
                 if (B)
                 {
                     B = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.B, false);
+                    GeneratePressType(EAmandsControllerButton.B, false);
                 }
             }
             if (gamepad.Buttons.HasFlag(GamepadButtonFlags.X))
@@ -1082,7 +674,7 @@ namespace AmandsController
                 if (!X)
                 {
                     X = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.X, true);
+                    GeneratePressType(EAmandsControllerButton.X, true);
                 }
             }
             else
@@ -1090,7 +682,7 @@ namespace AmandsController
                 if (X)
                 {
                     X = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.X, false);
+                    GeneratePressType(EAmandsControllerButton.X, false);
                 }
             }
             if (gamepad.Buttons.HasFlag(GamepadButtonFlags.Y))
@@ -1098,7 +690,7 @@ namespace AmandsController
                 if (!Y)
                 {
                     Y = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.Y, true);
+                    GeneratePressType(EAmandsControllerButton.Y, true);
                 }
             }
             else
@@ -1106,7 +698,7 @@ namespace AmandsController
                 if (Y)
                 {
                     Y = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.Y, false);
+                    GeneratePressType(EAmandsControllerButton.Y, false);
                 }
             }
             if (gamepad.Buttons.HasFlag(GamepadButtonFlags.LeftShoulder))
@@ -1114,8 +706,8 @@ namespace AmandsController
                 if (!LB)
                 {
                     LB = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.LB, true);
-                    AmandsControllerEnableSet("LB");
+                    GeneratePressType(EAmandsControllerButton.LB, true);
+                    EnableSet("LB");
                 }
             }
             else
@@ -1123,8 +715,8 @@ namespace AmandsController
                 if (LB)
                 {
                     LB = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.LB, false);
-                    AmandsControllerDisableSet("LB");
+                    GeneratePressType(EAmandsControllerButton.LB, false);
+                    DisableSet("LB");
                 }
             }
             if (gamepad.Buttons.HasFlag(GamepadButtonFlags.RightShoulder))
@@ -1132,8 +724,8 @@ namespace AmandsController
                 if (!RB)
                 {
                     RB = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.RB, true);
-                    AmandsControllerEnableSet("RB");
+                    GeneratePressType(EAmandsControllerButton.RB, true);
+                    EnableSet("RB");
                 }
             }
             else
@@ -1141,8 +733,8 @@ namespace AmandsController
                 if (RB)
                 {
                     RB = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.RB, false);
-                    AmandsControllerDisableSet("RB");
+                    GeneratePressType(EAmandsControllerButton.RB, false);
+                    DisableSet("RB");
                 }
             }
             if (gamepad.Buttons.HasFlag(GamepadButtonFlags.LeftShoulder | GamepadButtonFlags.RightShoulder))
@@ -1150,7 +742,7 @@ namespace AmandsController
                 if (!LB_RB)
                 {
                     LB_RB = true;
-                    AmandsControllerEnableSet("LB_RB");
+                    EnableSet("LB_RB");
                 }
             }
             else
@@ -1158,7 +750,7 @@ namespace AmandsController
                 if (LB_RB)
                 {
                     LB_RB = false;
-                    AmandsControllerDisableSet("LB_RB");
+                    DisableSet("LB_RB");
                 }
             }
             if (gamepad.Buttons.HasFlag(GamepadButtonFlags.LeftShoulder | GamepadButtonFlags.RightShoulder) && Interface)
@@ -1166,7 +758,7 @@ namespace AmandsController
                 if (!Interface_LB_RB)
                 {
                     Interface_LB_RB = true;
-                    AmandsControllerEnableSet("Interface_LB_RB");
+                    EnableSet("Interface_LB_RB");
                 }
             }
             else
@@ -1174,7 +766,7 @@ namespace AmandsController
                 if (Interface_LB_RB)
                 {
                     Interface_LB_RB = false;
-                    AmandsControllerDisableSet("Interface_LB_RB");
+                    DisableSet("Interface_LB_RB");
                 }
             }
             if (gamepad.Buttons.HasFlag(GamepadButtonFlags.LeftThumb))
@@ -1182,7 +774,7 @@ namespace AmandsController
                 if (!L)
                 {
                     L = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.LS, true);
+                    GeneratePressType(EAmandsControllerButton.LS, true);
                 }
             }
             else
@@ -1190,7 +782,7 @@ namespace AmandsController
                 if (L)
                 {
                     L = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.LS, false);
+                    GeneratePressType(EAmandsControllerButton.LS, false);
                 }
             }
             if (gamepad.Buttons.HasFlag(GamepadButtonFlags.RightThumb))
@@ -1198,7 +790,7 @@ namespace AmandsController
                 if (!R)
                 {
                     R = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.RS, true);
+                    GeneratePressType(EAmandsControllerButton.RS, true);
                 }
             }
             else
@@ -1206,7 +798,7 @@ namespace AmandsController
                 if (R)
                 {
                     R = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.RS, false);
+                    GeneratePressType(EAmandsControllerButton.RS, false);
                 }
             }
             if (gamepad.Buttons.HasFlag(GamepadButtonFlags.DPadUp))
@@ -1214,7 +806,7 @@ namespace AmandsController
                 if (!UP)
                 {
                     UP = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.UP, true);
+                    GeneratePressType(EAmandsControllerButton.UP, true);
                 }
             }
             else
@@ -1222,7 +814,7 @@ namespace AmandsController
                 if (UP)
                 {
                     UP = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.UP, false);
+                    GeneratePressType(EAmandsControllerButton.UP, false);
                 }
             }
             if (gamepad.Buttons.HasFlag(GamepadButtonFlags.DPadDown))
@@ -1230,7 +822,7 @@ namespace AmandsController
                 if (!DOWN)
                 {
                     DOWN = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.DOWN, true);
+                    GeneratePressType(EAmandsControllerButton.DOWN, true);
                 }
             }
             else
@@ -1238,7 +830,7 @@ namespace AmandsController
                 if (DOWN)
                 {
                     DOWN = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.DOWN, false);
+                    GeneratePressType(EAmandsControllerButton.DOWN, false);
                 }
             }
             if (gamepad.Buttons.HasFlag(GamepadButtonFlags.DPadLeft))
@@ -1246,7 +838,7 @@ namespace AmandsController
                 if (!LEFT)
                 {
                     LEFT = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.LEFT, true);
+                    GeneratePressType(EAmandsControllerButton.LEFT, true);
                 }
             }
             else
@@ -1254,7 +846,7 @@ namespace AmandsController
                 if (LEFT)
                 {
                     LEFT = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.LEFT, false);
+                    GeneratePressType(EAmandsControllerButton.LEFT, false);
                 }
             }
             if (gamepad.Buttons.HasFlag(GamepadButtonFlags.DPadRight))
@@ -1262,7 +854,7 @@ namespace AmandsController
                 if (!RIGHT)
                 {
                     RIGHT = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.RIGHT, true);
+                    GeneratePressType(EAmandsControllerButton.RIGHT, true);
                 }
             }
             else
@@ -1270,7 +862,7 @@ namespace AmandsController
                 if (RIGHT)
                 {
                     RIGHT = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.RIGHT, false);
+                    GeneratePressType(EAmandsControllerButton.RIGHT, false);
                 }
             }
             if (gamepad.Buttons.HasFlag(GamepadButtonFlags.Back))
@@ -1278,7 +870,7 @@ namespace AmandsController
                 if (!BACK)
                 {
                     BACK = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.BACK, true);
+                    GeneratePressType(EAmandsControllerButton.BACK, true);
                 }
             }
             else
@@ -1286,7 +878,7 @@ namespace AmandsController
                 if (BACK)
                 {
                     BACK = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.BACK, false);
+                    GeneratePressType(EAmandsControllerButton.BACK, false);
                 }
             }
             if (gamepad.Buttons.HasFlag(GamepadButtonFlags.Start))
@@ -1294,7 +886,7 @@ namespace AmandsController
                 if (!MENU)
                 {
                     MENU = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.MENU, true);
+                    GeneratePressType(EAmandsControllerButton.MENU, true);
                 }
             }
             else
@@ -1302,12 +894,12 @@ namespace AmandsController
                 if (MENU)
                 {
                     MENU = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.MENU, false);
+                    GeneratePressType(EAmandsControllerButton.MENU, false);
                 }
             }
 
-            LTSensitivity = (float)gamepad.LeftTrigger / 255f;
-            RTSensitivity = (float)gamepad.RightTrigger / 255f;
+            LeftTrigger = (float)gamepad.LeftTrigger / 255f;
+            RightTrigger = (float)gamepad.RightTrigger / 255f;
 
             LS.x = (float)gamepad.LeftThumbX / maxValue;
             LS.y = (float)gamepad.LeftThumbY / maxValue;
@@ -1317,8 +909,7 @@ namespace AmandsController
             RS.y = (float)gamepad.RightThumbY / maxValue;
             RSXYSqrt = Mathf.Sqrt(Mathf.Pow(RS.x, 2) + Mathf.Pow(RS.y, 2));
 
-            // LSButtons
-            if (LSXYSqrt > 0.25)
+            if (LSXYSqrt > AmandsControllerPlugin.LSDeadzone.Value)
             {
                 if (!LSINPUT)
                 {
@@ -1332,12 +923,12 @@ namespace AmandsController
                     LSINPUT = false;
                 }
             }
-            if (LS.y > 0.25)
+            if (LS.y > AmandsControllerPlugin.LSDeadzone.Value)
             {
                 if (!LSUP)
                 {
                     LSUP = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.LSUP, true);
+                    GeneratePressType(EAmandsControllerButton.LSUP, true);
                     if (!LSButtons && InterfaceStick == EAmandsControllerUseStick.LS)
                     {
                         ControllerUIMove(new Vector2Int(0, 1), false);
@@ -1357,15 +948,15 @@ namespace AmandsController
                 if (LSUP)
                 {
                     LSUP = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.LSUP, false);
+                    GeneratePressType(EAmandsControllerButton.LSUP, false);
                 }
             }
-            if (LS.y < -0.25)
+            if (LS.y < -AmandsControllerPlugin.LSDeadzone.Value)
             {
                 if (!LSDOWN)
                 {
                     LSDOWN = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.LSDOWN, true);
+                    GeneratePressType(EAmandsControllerButton.LSDOWN, true);
                     if (!LSButtons && InterfaceStick == EAmandsControllerUseStick.LS)
                     {
                         ControllerUIMove(new Vector2Int(0, -1), false);
@@ -1385,15 +976,15 @@ namespace AmandsController
                 if (LSDOWN)
                 {
                     LSDOWN = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.LSDOWN, false);
+                    GeneratePressType(EAmandsControllerButton.LSDOWN, false);
                 }
             }
-            if (LS.x > 0.25)
+            if (LS.x > AmandsControllerPlugin.LSDeadzone.Value)
             {
                 if (!LSRIGHT)
                 {
                     LSRIGHT = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.LSRIGHT, true);
+                    GeneratePressType(EAmandsControllerButton.LSRIGHT, true);
                     if (!LSButtons && InterfaceStick == EAmandsControllerUseStick.LS)
                     {
                         ControllerUIMove(new Vector2Int(1, 0), false);
@@ -1413,15 +1004,15 @@ namespace AmandsController
                 if (LSRIGHT)
                 {
                     LSRIGHT = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.LSRIGHT, false);
+                    GeneratePressType(EAmandsControllerButton.LSRIGHT, false);
                 }
             }
-            if (LS.x < -0.25)
+            if (LS.x < -AmandsControllerPlugin.LSDeadzone.Value)
             {
                 if (!LSLEFT)
                 {
                     LSLEFT = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.LSLEFT, true);
+                    GeneratePressType(EAmandsControllerButton.LSLEFT, true);
                     if (!LSButtons && InterfaceStick == EAmandsControllerUseStick.LS)
                     {
                         ControllerUIMove(new Vector2Int(-1, 0), false);
@@ -1441,11 +1032,11 @@ namespace AmandsController
                 if (LSLEFT)
                 {
                     LSLEFT = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.LSLEFT, false);
+                    GeneratePressType(EAmandsControllerButton.LSLEFT, false);
                 }
             }
-            // RSButtons
-            if (RSXYSqrt > 0.25)
+
+            if (RSXYSqrt > AmandsControllerPlugin.RSDeadzone.Value)
             {
                 if (!RSINPUT)
                 {
@@ -1459,12 +1050,12 @@ namespace AmandsController
                     RSINPUT = false;
                 }
             }
-            if (RS.y > 0.25)
+            if (RS.y > AmandsControllerPlugin.RSDeadzone.Value)
             {
                 if (!RSUP)
                 {
                     RSUP = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.RSUP, true);
+                    GeneratePressType(EAmandsControllerButton.RSUP, true);
                     if (!RSButtons && InterfaceStick == EAmandsControllerUseStick.RS)
                     {
                         ControllerUIMove(new Vector2Int(0, 1), false);
@@ -1484,15 +1075,15 @@ namespace AmandsController
                 if (RSUP)
                 {
                     RSUP = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.RSUP, false);
+                    GeneratePressType(EAmandsControllerButton.RSUP, false);
                 }
             }
-            if (RS.y < -0.25)
+            if (RS.y < -AmandsControllerPlugin.RSDeadzone.Value)
             {
                 if (!RSDOWN)
                 {
                     RSDOWN = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.RSDOWN, true);
+                    GeneratePressType(EAmandsControllerButton.RSDOWN, true);
                     if (!RSButtons && InterfaceStick == EAmandsControllerUseStick.RS)
                     {
                         ControllerUIMove(new Vector2Int(0, -1), false);
@@ -1512,15 +1103,15 @@ namespace AmandsController
                 if (RSDOWN)
                 {
                     RSDOWN = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.RSDOWN, false);
+                    GeneratePressType(EAmandsControllerButton.RSDOWN, false);
                 }
             }
-            if (RS.x > 0.25)
+            if (RS.x > AmandsControllerPlugin.RSDeadzone.Value)
             {
                 if (!RSRIGHT)
                 {
                     RSRIGHT = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.RSRIGHT, true);
+                    GeneratePressType(EAmandsControllerButton.RSRIGHT, true);
                     if (!RSButtons && InterfaceStick == EAmandsControllerUseStick.RS)
                     {
                         ControllerUIMove(new Vector2Int(1, 0), false);
@@ -1540,15 +1131,15 @@ namespace AmandsController
                 if (RSRIGHT)
                 {
                     RSRIGHT = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.RSRIGHT, false);
+                    GeneratePressType(EAmandsControllerButton.RSRIGHT, false);
                 }
             }
-            if (RS.x < -0.25)
+            if (RS.x < -AmandsControllerPlugin.RSDeadzone.Value)
             {
                 if (!RSLEFT)
                 {
                     RSLEFT = true;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.RSLEFT, true);
+                    GeneratePressType(EAmandsControllerButton.RSLEFT, true);
                     if (!RSButtons && InterfaceStick == EAmandsControllerUseStick.RS)
                     {
                         ControllerUIMove(new Vector2Int(-1, 0), false);
@@ -1568,7 +1159,7 @@ namespace AmandsController
                 if (RSLEFT)
                 {
                     RSLEFT = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.RSLEFT, false);
+                    GeneratePressType(EAmandsControllerButton.RSLEFT, false);
                 }
             }
 
@@ -1585,7 +1176,7 @@ namespace AmandsController
                         AutoMoveTimeDelay = 0.1f;
                         if (SplitDialogAutoMove)
                         {
-                            AmandsControllerSplitDialogAdd(lastIntSliderValue);
+                            ControllerSplitDialogAdd(lastIntSliderValue);
                         }
                         else if (AutoMove)
                         {
@@ -1604,19 +1195,33 @@ namespace AmandsController
                 switch (WindowStick)
                 {
                     case EAmandsControllerUseStick.LS:
-                        if (!LSButtons && currentContainedGridsView != null && LSXYSqrt > 0.3f)
+                        if (!LSButtons && LSXYSqrt > AmandsControllerPlugin.LSDeadzone.Value)
                         {
-                            currentContainedGridsView.transform.parent.position += new Vector3(LS.x, LS.y, 0f) * 1000f * Time.deltaTime;
-                            UpdateGlobalPosition();
-                            WindowLS = true;
+                            if (currentContainedGridsView != null)
+                            {
+                                currentContainedGridsView.transform.parent.position += new Vector3(LS.x, LS.y, 0f) * 1000f * Time.deltaTime;
+                                WindowLS = true;
+                            }
+                            else if (currentItemSpecificationPanel != null)
+                            {
+                                currentItemSpecificationPanel.transform.position += new Vector3(LS.x, LS.y, 0f) * 1000f * Time.deltaTime;
+                                WindowLS = true;
+                            }
                         }
                         break;
                     case EAmandsControllerUseStick.RS:
-                        if (!RSButtons && currentContainedGridsView != null && RSXYSqrt > 0.3f)
+                        if (!RSButtons && currentContainedGridsView != null && RSXYSqrt > AmandsControllerPlugin.RSDeadzone.Value)
                         {
-                            currentContainedGridsView.transform.parent.position += new Vector3(RS.x, RS.y, 0f) * 1000f * Time.deltaTime;
-                            UpdateGlobalPosition();
-                            WindowRS = true;
+                            if (currentContainedGridsView != null)
+                            {
+                                currentContainedGridsView.transform.parent.position += new Vector3(RS.x, RS.y, 0f) * 1000f * Time.deltaTime;
+                                WindowRS = true;
+                            }
+                            else if (currentItemSpecificationPanel != null)
+                            {
+                                currentItemSpecificationPanel.transform.position += new Vector3(RS.x, RS.y, 0f) * 1000f * Time.deltaTime;
+                                WindowRS = true;
+                            }
                         }
                         break;
                 }
@@ -1627,13 +1232,13 @@ namespace AmandsController
                     case EAmandsControllerUseStick.LS:
                         if (LSButtons || WindowLS) break;
                         InterfaceStickMoveTime += Time.deltaTime;
-                        if (InterfaceStickMoveTime > InterfaceStickMoveTimeDelay && (Mathf.Abs(LS.x) > 0.3f || Mathf.Abs(LS.y) > 0.3f))
+                        if (InterfaceStickMoveTime > InterfaceStickMoveTimeDelay && (Mathf.Abs(LS.x) > AmandsControllerPlugin.LSDeadzone.Value || Mathf.Abs(LS.y) > AmandsControllerPlugin.LSDeadzone.Value))
                         {
                             InterfaceStickMoveTime = 0f;
                             InterfaceStickMoveTimeDelay = 0.15f;
-                            ControllerUIMove(new Vector2Int(LS.x > 0.3f ? 1 : LS.x < -0.3f ? -1 : 0, LS.y > 0.3f ? 1 : LS.y < -0.3f ? -1 : 0), false);
+                            ControllerUIMove(new Vector2Int(LS.x > AmandsControllerPlugin.LSDeadzone.Value ? 1 : LS.x < -AmandsControllerPlugin.LSDeadzone.Value ? -1 : 0, LS.y > AmandsControllerPlugin.LSDeadzone.Value ? 1 : LS.y < -AmandsControllerPlugin.LSDeadzone.Value ? -1 : 0), false);
                         }
-                        else if (!(Mathf.Abs(LS.x) > 0.3f || Mathf.Abs(LS.y) > 0.3f))
+                        else if (!(Mathf.Abs(LS.x) > AmandsControllerPlugin.LSDeadzone.Value || Mathf.Abs(LS.y) > AmandsControllerPlugin.LSDeadzone.Value))
                         {
                             InterfaceStickMoveTime = 1f;
                             InterfaceStickMoveTimeDelay = 0.3f;
@@ -1642,13 +1247,13 @@ namespace AmandsController
                     case EAmandsControllerUseStick.RS:
                         if (RSButtons || WindowRS) break;
                         InterfaceStickMoveTime += Time.deltaTime;
-                        if (InterfaceStickMoveTime > InterfaceStickMoveTimeDelay && (Mathf.Abs(RS.x) > 0.3f || Mathf.Abs(RS.y) > 0.3f))
+                        if (InterfaceStickMoveTime > InterfaceStickMoveTimeDelay && (Mathf.Abs(RS.x) > AmandsControllerPlugin.RSDeadzone.Value || Mathf.Abs(RS.y) > AmandsControllerPlugin.RSDeadzone.Value))
                         {
                             InterfaceStickMoveTime = 0f;
                             InterfaceStickMoveTimeDelay = 0.15f;
-                            ControllerUIMove(new Vector2Int(RS.x > 0.3f ? 1 : RS.x < -0.3f ? -1 : 0, RS.y > 0.3f ? 1 : RS.y < -0.3f ? -1 : 0), false);
+                            ControllerUIMove(new Vector2Int(RS.x > AmandsControllerPlugin.RSDeadzone.Value ? 1 : RS.x < -AmandsControllerPlugin.RSDeadzone.Value ? -1 : 0, RS.y > AmandsControllerPlugin.RSDeadzone.Value ? 1 : RS.y < -AmandsControllerPlugin.RSDeadzone.Value ? -1 : 0), false);
                         }
-                        else if (!(Mathf.Abs(RS.x) > 0.3f || Mathf.Abs(RS.y) > 0.3f))
+                        else if (!(Mathf.Abs(RS.x) > AmandsControllerPlugin.RSDeadzone.Value || Mathf.Abs(RS.y) > AmandsControllerPlugin.RSDeadzone.Value))
                         {
                             InterfaceStickMoveTime = 1f;
                             InterfaceStickMoveTimeDelay = 0.3f;
@@ -1662,13 +1267,13 @@ namespace AmandsController
                     case EAmandsControllerUseStick.LS:
                         if (LSButtons || WindowLS) break;
                         InterfaceSkipStickMoveTime += Time.deltaTime;
-                        if (InterfaceSkipStickMoveTime > InterfaceSkipStickMoveTimeDelay && (Mathf.Abs(LS.x) > 0.3f || Mathf.Abs(LS.y) > 0.3f))
+                        if (InterfaceSkipStickMoveTime > InterfaceSkipStickMoveTimeDelay && (Mathf.Abs(LS.x) > AmandsControllerPlugin.LSDeadzone.Value || Mathf.Abs(LS.y) > AmandsControllerPlugin.LSDeadzone.Value))
                         {
                             InterfaceSkipStickMoveTime = 0f;
                             InterfaceSkipStickMoveTimeDelay = 0.15f;
-                            ControllerUIMove(new Vector2Int(LS.x > 0.3f ? 1 : LS.x < -0.3f ? -1 : 0, LS.y > 0.3f ? 1 : LS.y < -0.3f ? -1 : 0), true);
+                            ControllerUIMove(new Vector2Int(LS.x > AmandsControllerPlugin.LSDeadzone.Value ? 1 : LS.x < -AmandsControllerPlugin.LSDeadzone.Value ? -1 : 0, LS.y > AmandsControllerPlugin.LSDeadzone.Value ? 1 : LS.y < -AmandsControllerPlugin.LSDeadzone.Value ? -1 : 0), true);
                         }
-                        else if (!(Mathf.Abs(LS.x) > 0.3f || Mathf.Abs(LS.y) > 0.3f))
+                        else if (!(Mathf.Abs(LS.x) > AmandsControllerPlugin.LSDeadzone.Value || Mathf.Abs(LS.y) > AmandsControllerPlugin.LSDeadzone.Value))
                         {
                             InterfaceSkipStickMoveTime = 1f;
                             InterfaceSkipStickMoveTimeDelay = 0.3f;
@@ -1677,13 +1282,13 @@ namespace AmandsController
                     case EAmandsControllerUseStick.RS:
                         if (RSButtons || WindowRS) break;
                         InterfaceSkipStickMoveTime += Time.deltaTime;
-                        if (InterfaceSkipStickMoveTime > InterfaceSkipStickMoveTimeDelay && (Mathf.Abs(RS.x) > 0.3f || Mathf.Abs(RS.y) > 0.3f))
+                        if (InterfaceSkipStickMoveTime > InterfaceSkipStickMoveTimeDelay && (Mathf.Abs(RS.x) > AmandsControllerPlugin.RSDeadzone.Value || Mathf.Abs(RS.y) > AmandsControllerPlugin.RSDeadzone.Value))
                         {
                             InterfaceSkipStickMoveTime = 0f;
                             InterfaceSkipStickMoveTimeDelay = 0.15f;
-                            ControllerUIMove(new Vector2Int(RS.x > 0.3f ? 1 : RS.x < -0.3f ? -1 : 0, RS.y > 0.3f ? 1 : RS.y < -0.3f ? -1 : 0), true);
+                            ControllerUIMove(new Vector2Int(RS.x > AmandsControllerPlugin.RSDeadzone.Value ? 1 : RS.x < -AmandsControllerPlugin.RSDeadzone.Value ? -1 : 0, RS.y > AmandsControllerPlugin.RSDeadzone.Value ? 1 : RS.y < -AmandsControllerPlugin.RSDeadzone.Value ? -1 : 0), true);
                         }
-                        else if (!(Mathf.Abs(RS.x) > 0.3f || Mathf.Abs(RS.y) > 0.3f))
+                        else if (!(Mathf.Abs(RS.x) > AmandsControllerPlugin.RSDeadzone.Value || Mathf.Abs(RS.y) > AmandsControllerPlugin.RSDeadzone.Value))
                         {
                             InterfaceSkipStickMoveTime = 1f;
                             InterfaceSkipStickMoveTimeDelay = 0.3f;
@@ -1697,51 +1302,36 @@ namespace AmandsController
                     switch (ScrollStick)
                     {
                         case EAmandsControllerUseStick.None:
-                            AmandsControllerAutoScroll();
+                            ControllerAutoScroll();
                             break;
                         case EAmandsControllerUseStick.LS:
-                            if (Mathf.Abs(LS.y) > 0.3f && !LSButtons && !WindowLS)
+                            if (Mathf.Abs(LS.y) > AmandsControllerPlugin.LSDeadzone.Value && !LSButtons && !WindowLS)
                             {
-                                AmandsControllerScroll(LS.y);
+                                ControllerScroll(LS.y);
                             }
                             else
                             {
-                                AmandsControllerAutoScroll();
+                                ControllerAutoScroll();
                             }
                             break;
                         case EAmandsControllerUseStick.RS:
-                            if (Mathf.Abs(RS.y) > 0.3f && !RSButtons && !WindowRS)
+                            if (Mathf.Abs(RS.y) > AmandsControllerPlugin.RSDeadzone.Value && !RSButtons && !WindowRS)
                             {
-                                AmandsControllerScroll(RS.y);
+                                ControllerScroll(RS.y);
                             }
                             else
                             {
-                                AmandsControllerAutoScroll();
+                                ControllerAutoScroll();
                             }
                             break;
                     }
                 }
-            }
 
-            if (localPlayer == null || Interface) return;
-
-            // Aiming
-            if (localPlayer.HandsController != null)
-            {
-                if (localPlayer.HandsController.IsAiming && !isAiming)
-                {
-                    isAiming = true;
-                    AmandsControllerEnableSet("Aiming");
-                }
-                else if (isAiming && !localPlayer.HandsController.IsAiming)
-                {
-                    isAiming = false;
-                    AmandsControllerDisableSet("Aiming");
-                }
+                return;
             }
 
             // Movement
-            if (!LSButtons && LSXYSqrt > AmandsControllerPlugin.LDeadzone.Value)
+            if (!LSButtons && LSXYSqrt > AmandsControllerPlugin.MovementDeadzone.Value)
             {
                 localPlayer.Move(LS.normalized);
                 CharacterMovementSpeed = 0f;
@@ -1749,13 +1339,13 @@ namespace AmandsController
                 {
                     StateSpeedLimit = Traverse.Create(MovementContextObject).Property("StateSpeedLimit").GetValue<float>();
                     MaxSpeed = Traverse.Create(MovementContextObject).Property("MaxSpeed").GetValue<float>();
-                    CharacterMovementSpeed = Mathf.Lerp(-AmandsControllerPlugin.LDeadzone.Value - AmandsControllerPlugin.DeadzoneBuffer.Value, 1f, LSXYSqrt) * Mathf.Min(StateSpeedLimit, MaxSpeed);
+                    CharacterMovementSpeed = Mathf.Lerp(-AmandsControllerPlugin.MovementDeadzone.Value - AmandsControllerPlugin.DeadzoneBuffer.Value, 1f, LSXYSqrt) * Mathf.Min(StateSpeedLimit, MaxSpeed);
                     MovementInvokeParameters[0] = CharacterMovementSpeed;
                     SetCharacterMovementSpeed.Invoke(MovementContextObject, MovementInvokeParameters);
                 }
                 if (speedSlider != null)
                 {
-                    speedSlider.value = Mathf.Floor(((CharacterMovementSpeed + AmandsControllerPlugin.FloorDecimalAdd.Value) / speedSlider.maxValue) * 20f) * (speedSlider.maxValue / 20f);
+                    speedSlider.value = Mathf.Floor(((CharacterMovementSpeed + 0.005f) / speedSlider.maxValue) * 20f) * (speedSlider.maxValue / 20f);
                 }
                 resetCharacterMovementSpeed = true;
             }
@@ -1772,27 +1362,28 @@ namespace AmandsController
                 }
             }
 
-            // Look
-            Magnetism = false;
-            Stickiness = 0;
-            AutoAim = Vector2.zero;
-            if (firearmController == null)
-            {
-                firearmController = localPlayer.HandsController as FirearmController;
-            }
+            // Aiming
             if (localPlayer != null && Camera.main != null)
             {
-                Vector3 position = Vector3.one;
-                Vector3 direction = Vector3.forward;
+                Magnetism = false;
+                Stickiness = 0;
+                AutoAim = Vector2.zero;
 
+                AimPosition = Vector3.one;
+                AimDirection = Vector3.forward;
+
+                if (firearmController == null)
+                {
+                    firearmController = localPlayer.HandsController as Player.FirearmController;
+                }
                 if (firearmController != null)
                 {
-                    position = firearmController.CurrentFireport.position;
-                    direction = firearmController.WeaponDirection;
-                    firearmController.AdjustShotVectors(ref position, ref direction);
+                    AimPosition = firearmController.CurrentFireport.position;
+                    AimDirection = firearmController.WeaponDirection;
+                    firearmController.AdjustShotVectors(ref AimPosition, ref AimDirection);
                 }
                 colliders = new Collider[100];
-                colliderCount = Physics.OverlapCapsuleNonAlloc(position, position + (direction * 1000f), AmandsControllerPlugin.Radius.Value, colliders, AimAssistLayerMask, QueryTriggerInteraction.Ignore);
+                colliderCount = Physics.OverlapCapsuleNonAlloc(AimPosition, AimPosition + (AimDirection * 200f), AmandsControllerPlugin.Radius.Value, colliders, AimAssistLayerMask, QueryTriggerInteraction.Ignore);
 
                 ScreenSize = new Vector2(Screen.width, Screen.height);
                 ScreenSizeRatioMultiplier = new Vector2(1f, (float)(Screen.height) / (float)(Screen.width));
@@ -1807,25 +1398,25 @@ namespace AmandsController
                     HitAimAssistLocalPlayer = colliders[i].transform.gameObject.GetComponent<LocalPlayer>();
                     if (HitAimAssistLocalPlayer != null && HitAimAssistLocalPlayer != localPlayer)
                     {
-                        AimAssistScreenLocalPosition = ((((((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Head.position + (HitAimAssistLocalPlayer.Velocity * AmandsControllerPlugin.AutoAimEnemyVelocity.Value))  * SSAARatio) - (((((Vector2)Camera.main.WorldToScreenPoint(position + (direction * Vector3.Distance(position, HitAimAssistLocalPlayer.PlayerBones.Head.position + (HitAimAssistLocalPlayer.Velocity * AmandsControllerPlugin.AutoAimEnemyVelocity.Value))))  * SSAARatio) - (((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Head.position + (HitAimAssistLocalPlayer.Velocity * AmandsControllerPlugin.AutoAimEnemyVelocity.Value))  * SSAARatio) - (ScreenSize / 2f))) - (ScreenSize / 2f)) * 2f)) - (ScreenSize / 2f)) / ScreenSize) * ScreenSizeRatioMultiplier);
+                        AimAssistScreenLocalPosition = ((((((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Head.position + (HitAimAssistLocalPlayer.Velocity * 0f))  * SSAARatio) - (((((Vector2)Camera.main.WorldToScreenPoint(AimPosition + (AimDirection * Vector3.Distance(AimPosition, HitAimAssistLocalPlayer.PlayerBones.Head.position + (HitAimAssistLocalPlayer.Velocity * 0f))))  * SSAARatio) - (((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Head.position + (HitAimAssistLocalPlayer.Velocity * 0f))  * SSAARatio) - (ScreenSize / 2f))) - (ScreenSize / 2f)) * 2f)) - (ScreenSize / 2f)) / ScreenSize) * ScreenSizeRatioMultiplier);
                         AimAssistBoneAngle = Mathf.Sqrt(Vector2.SqrMagnitude(AimAssistScreenLocalPosition)) / (ScreenSize.y / ScreenSize.x);
-                        if (AimAssistBoneAngle < Mathf.Max(AmandsControllerPlugin.MagnetismRadius.Value, AmandsControllerPlugin.StickinessRadius.Value, AmandsControllerPlugin.AutoAimRadius.Value) && AimAssistBoneAngle < AimAssistAngle && !Physics.Raycast(position, (HitAimAssistLocalPlayer.PlayerBones.Head.position - position).normalized, out hit, Vector3.Distance(HitAimAssistLocalPlayer.PlayerBones.Head.position, position), HighLayerMask, QueryTriggerInteraction.Ignore))
+                        if (AimAssistBoneAngle < Mathf.Max(AmandsControllerPlugin.MagnetismRadius.Value, AmandsControllerPlugin.StickinessRadius.Value, AmandsControllerPlugin.AutoAimRadius.Value) && AimAssistBoneAngle < AimAssistAngle && !Physics.Raycast(AimPosition, (HitAimAssistLocalPlayer.PlayerBones.Head.position - AimPosition).normalized, out hit, Vector3.Distance(HitAimAssistLocalPlayer.PlayerBones.Head.position, AimPosition), HighLayerMask, QueryTriggerInteraction.Ignore))
                         {
                             AimAssistAngle = AimAssistBoneAngle;
                             AimAssistLocalPlayer = HitAimAssistLocalPlayer;
                             AimAssistTarget2DPoint = AimAssistScreenLocalPosition;
                         }
-                        AimAssistScreenLocalPosition = ((((((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Ribcage.position + (HitAimAssistLocalPlayer.Velocity * AmandsControllerPlugin.AutoAimEnemyVelocity.Value))  * SSAARatio) - (((((Vector2)Camera.main.WorldToScreenPoint(position + (direction * Vector3.Distance(position, HitAimAssistLocalPlayer.PlayerBones.Ribcage.position + (HitAimAssistLocalPlayer.Velocity * AmandsControllerPlugin.AutoAimEnemyVelocity.Value))))  * SSAARatio) - (((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Ribcage.position + (HitAimAssistLocalPlayer.Velocity * AmandsControllerPlugin.AutoAimEnemyVelocity.Value))  * SSAARatio) - (ScreenSize / 2f))) - (ScreenSize / 2f)) * 2f)) - (ScreenSize / 2f)) / ScreenSize) * ScreenSizeRatioMultiplier);
+                        AimAssistScreenLocalPosition = ((((((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Ribcage.position + (HitAimAssistLocalPlayer.Velocity * 0f))  * SSAARatio) - (((((Vector2)Camera.main.WorldToScreenPoint(AimPosition + (AimDirection * Vector3.Distance(AimPosition, HitAimAssistLocalPlayer.PlayerBones.Ribcage.position + (HitAimAssistLocalPlayer.Velocity * 0f))))  * SSAARatio) - (((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Ribcage.position + (HitAimAssistLocalPlayer.Velocity * 0f))  * SSAARatio) - (ScreenSize / 2f))) - (ScreenSize / 2f)) * 2f)) - (ScreenSize / 2f)) / ScreenSize) * ScreenSizeRatioMultiplier);
                         AimAssistBoneAngle = Mathf.Sqrt(Vector2.SqrMagnitude(AimAssistScreenLocalPosition)) / (ScreenSize.y / ScreenSize.x);
-                        if (AimAssistBoneAngle < Mathf.Max(AmandsControllerPlugin.MagnetismRadius.Value, AmandsControllerPlugin.StickinessRadius.Value, AmandsControllerPlugin.AutoAimRadius.Value) && AimAssistBoneAngle < AimAssistAngle && !Physics.Raycast(position, (HitAimAssistLocalPlayer.PlayerBones.Ribcage.position - position).normalized, out hit, Vector3.Distance(HitAimAssistLocalPlayer.PlayerBones.Ribcage.position, position), HighLayerMask, QueryTriggerInteraction.Ignore))
+                        if (AimAssistBoneAngle < Mathf.Max(AmandsControllerPlugin.MagnetismRadius.Value, AmandsControllerPlugin.StickinessRadius.Value, AmandsControllerPlugin.AutoAimRadius.Value) && AimAssistBoneAngle < AimAssistAngle && !Physics.Raycast(AimPosition, (HitAimAssistLocalPlayer.PlayerBones.Ribcage.position - AimPosition).normalized, out hit, Vector3.Distance(HitAimAssistLocalPlayer.PlayerBones.Ribcage.position, AimPosition), HighLayerMask, QueryTriggerInteraction.Ignore))
                         {
                             AimAssistAngle = AimAssistBoneAngle;
                             AimAssistLocalPlayer = HitAimAssistLocalPlayer;
                             AimAssistTarget2DPoint = AimAssistScreenLocalPosition;
                         }
-                        AimAssistScreenLocalPosition = ((((((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Pelvis.position + (HitAimAssistLocalPlayer.Velocity * AmandsControllerPlugin.AutoAimEnemyVelocity.Value))  * SSAARatio) - (((((Vector2)Camera.main.WorldToScreenPoint(position + (direction * Vector3.Distance(position, HitAimAssistLocalPlayer.PlayerBones.Pelvis.position + (HitAimAssistLocalPlayer.Velocity * AmandsControllerPlugin.AutoAimEnemyVelocity.Value))))  * SSAARatio) - (((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Pelvis.position + (HitAimAssistLocalPlayer.Velocity * AmandsControllerPlugin.AutoAimEnemyVelocity.Value))  * SSAARatio) - (ScreenSize / 2f))) - (ScreenSize / 2f)) * 2f)) - (ScreenSize / 2f)) / ScreenSize) * ScreenSizeRatioMultiplier);
+                        AimAssistScreenLocalPosition = ((((((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Pelvis.position + (HitAimAssistLocalPlayer.Velocity * 0f))  * SSAARatio) - (((((Vector2)Camera.main.WorldToScreenPoint(AimPosition + (AimDirection * Vector3.Distance(AimPosition, HitAimAssistLocalPlayer.PlayerBones.Pelvis.position + (HitAimAssistLocalPlayer.Velocity * 0f))))  * SSAARatio) - (((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Pelvis.position + (HitAimAssistLocalPlayer.Velocity * 0f))  * SSAARatio) - (ScreenSize / 2f))) - (ScreenSize / 2f)) * 2f)) - (ScreenSize / 2f)) / ScreenSize) * ScreenSizeRatioMultiplier);
                         AimAssistBoneAngle = Mathf.Sqrt(Vector2.SqrMagnitude(AimAssistScreenLocalPosition)) / (ScreenSize.y / ScreenSize.x);
-                        if (AimAssistBoneAngle < Mathf.Max(AmandsControllerPlugin.MagnetismRadius.Value, AmandsControllerPlugin.StickinessRadius.Value, AmandsControllerPlugin.AutoAimRadius.Value) && AimAssistBoneAngle < AimAssistAngle && !Physics.Raycast(position, (HitAimAssistLocalPlayer.PlayerBones.Pelvis.position - position).normalized, out hit, Vector3.Distance(HitAimAssistLocalPlayer.PlayerBones.Pelvis.position, position), HighLayerMask, QueryTriggerInteraction.Ignore))
+                        if (AimAssistBoneAngle < Mathf.Max(AmandsControllerPlugin.MagnetismRadius.Value, AmandsControllerPlugin.StickinessRadius.Value, AmandsControllerPlugin.AutoAimRadius.Value) && AimAssistBoneAngle < AimAssistAngle && !Physics.Raycast(AimPosition, (HitAimAssistLocalPlayer.PlayerBones.Pelvis.position - AimPosition).normalized, out hit, Vector3.Distance(HitAimAssistLocalPlayer.PlayerBones.Pelvis.position, AimPosition), HighLayerMask, QueryTriggerInteraction.Ignore))
                         {
                             AimAssistAngle = AimAssistBoneAngle;
                             AimAssistLocalPlayer = HitAimAssistLocalPlayer;
@@ -1851,11 +1442,26 @@ namespace AmandsController
             }
             StickinessSmooth += ((Stickiness - StickinessSmooth) * AmandsControllerPlugin.StickinessSmooth.Value) * Time.deltaTime;
             AutoAimSmooth += ((AutoAim - AutoAimSmooth) * AmandsControllerPlugin.AutoAimSmooth.Value) * Time.deltaTime;
-            if (!RSButtons && RSXYSqrt > AmandsControllerPlugin.RDeadzone.Value || Mathf.Sqrt(Mathf.Pow(AutoAimSmooth.x, 2) + Mathf.Pow(AutoAimSmooth.y, 2)) > AmandsControllerPlugin.RDeadzone.Value)
+            if (!RSButtons && RSXYSqrt > AmandsControllerPlugin.AimDeadzone.Value || Mathf.Sqrt(Mathf.Pow(AutoAimSmooth.x, 2) + Mathf.Pow(AutoAimSmooth.y, 2)) > AmandsControllerPlugin.AimDeadzone.Value)
             {
                 Aim.x = RS.x * AimAnimationCurve.Evaluate(RSXYSqrt);
                 Aim.y = RS.y * AimAnimationCurve.Evaluate(RSXYSqrt);
-                localPlayer.Rotate(((Aim * AmandsControllerPlugin.Sensitivity.Value * 100f * Time.deltaTime) * Mathf.Lerp(1f, AmandsControllerPlugin.Stickiness.Value, StickinessSmooth)) + AutoAimSmooth, false);
+                localPlayer.Rotate(((Aim * (isAiming ? AmandsControllerPlugin.AimingSensitivity.Value : AmandsControllerPlugin.Sensitivity.Value) * (AmandsControllerPlugin.InvertY.Value ? Vector2.one * 100f : InvertY) * Time.deltaTime) * Mathf.Lerp(1f, AmandsControllerPlugin.Stickiness.Value, StickinessSmooth)) + AutoAimSmooth, false);
+            }
+
+            // Aiming Set
+            if (localPlayer.HandsController != null)
+            {
+                if (localPlayer.HandsController.IsAiming && !isAiming)
+                {
+                    isAiming = true;
+                    EnableSet("Aiming");
+                }
+                else if (isAiming && !localPlayer.HandsController.IsAiming)
+                {
+                    isAiming = false;
+                    DisableSet("Aiming");
+                }
             }
 
             // Lean
@@ -1864,8 +1470,47 @@ namespace AmandsController
                 localPlayer.SlowLean(((SlowLeanLeft ? -AmandsControllerPlugin.LeanSensitivity.Value: 0) + (SlowLeanRight ? AmandsControllerPlugin.LeanSensitivity.Value : 0)) * Time.deltaTime);
             }
         }
+        private void BlockPositionUpdated(object sender, EventArgs e)
+        {
+            if (AllGameObject != null && AllGameObject.activeSelf)
+            {
+                AllGameObject.transform.position = new Vector2(Screen.width, 0f) + AmandsControllerPlugin.BlockPosition.Value;
+            }
+        }
+        private void UserIndexUpdated(object sender, EventArgs e)
+        {
+            if (localPlayer != null)
+            {
+                switch (AmandsControllerPlugin.UserIndex.Value)
+                {
+                    case 1:
+                        controller = new Controller(UserIndex.One);
+                        connected = controller.IsConnected;
+                        break;
+                    case 2:
+                        controller = new Controller(UserIndex.Two);
+                        connected = controller.IsConnected;
+                        break;
+                    case 3:
+                        controller = new Controller(UserIndex.Three);
+                        connected = controller.IsConnected;
+                        break;
+                    case 4:
+                        controller = new Controller(UserIndex.Four);
+                        connected = controller.IsConnected;
+                        break;
+                    default:
+                        controller = new Controller(UserIndex.One);
+                        connected = controller.IsConnected;
+                        break;
+                }
+            }
+        }
+
         public void UpdateController(LocalPlayer Player)
         {
+            ScreenRatio = (Screen.height / 1080f);
+
             eventSystem = FindObjectOfType<EventSystem>();
             pointerEventData = new PointerEventData(eventSystem);
             pointerEventData.button = PointerEventData.InputButton.Left;
@@ -1901,7 +1546,7 @@ namespace AmandsController
                 MovementContextType = MovementContextObject.GetType();
                 SetCharacterMovementSpeed = MovementContextType.GetMethod("SetCharacterMovementSpeed", BindingFlags.Instance | BindingFlags.Public);
             }
-            globalPosition = new Vector2(Screen.width / 2f, Screen.height / 2f);
+            globalPosition = new Vector2(Screen.width / 2.2f, Screen.height);
             if (controllerPresetJsonClass != null && controllerPresetJsonClass.AmandsControllerButtonBinds != null && controllerPresetJsonClass.AmandsControllerSets != null)
             {
                 AmandsControllerSets.Clear();
@@ -2074,6 +1719,7 @@ namespace AmandsController
             AmandsControllerSets["SplitDialog"][EAmandsControllerButton.LEFT].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.SplitDialogDisableAutoMove), EAmandsControllerPressType.Release, 50));
             AmandsControllerSets["SplitDialog"].Add(EAmandsControllerButton.RIGHT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.SplitDialogAdd), EAmandsControllerPressType.Press, 50) });
             AmandsControllerSets["SplitDialog"][EAmandsControllerButton.RIGHT].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.SplitDialogDisableAutoMove), EAmandsControllerPressType.Release, 50));
+            AmandsControllerSets["SplitDialog"].Add(EAmandsControllerButton.RS, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.None), EAmandsControllerPressType.Press, 50) });
 
             AmandsControllerButtonBinds.Clear();
             AmandsControllerButtonBinds.Add(EAmandsControllerButton.LT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.ToggleAlternativeShooting), new AmandsControllerCommand(ECommand.EndSprinting), new AmandsControllerCommand(ECommand.TryLowThrow) }, EAmandsControllerPressType.Press, -1) });
@@ -2114,63 +1760,49 @@ namespace AmandsController
             Interface = Enabled;
             if (Enabled)
             {
-                AmandsControllerEnableSet("Interface");
+                EnableSet("Interface");
             }
             else
             {
-                AmandsControllerDisableSet("Interface");
-                AmandsControllerDisableSet("Interface_LB");
-                AmandsControllerDisableSet("Interface_LB_RB");
-                AmandsControllerDisableSet("OnDrag");
-                AmandsControllerDisableSet("SearchButton");
+                DisableSet("Interface");
+                DisableSet("Interface_LB");
+                DisableSet("Interface_LB_RB");
+                DisableSet("OnDrag");
+                DisableSet("SearchButton");
             }
         }
         public void UpdateActionPanelBinds(bool Enabled)
         {
             if (Enabled)
             {
-                AmandsControllerEnableSet("ActionPanel");
+                EnableSet("ActionPanel");
             }
             else
             {
-                AmandsControllerDisableSet("ActionPanel");
+                DisableSet("ActionPanel");
             }
         }
         public void UpdateSplitDialogBinds(bool Enabled)
         {
             if (Enabled)
             {
-                AmandsControllerEnableSet("SplitDialog");
+                EnableSet("SplitDialog");
             }
             else
             {
-                AmandsControllerDisableSet("SplitDialog");
+                DisableSet("SplitDialog");
             }
-        }
-        public void UpdateHealingLimbSelectorBinds(bool Enabled)
-        {
-            /*if (Enabled)
-            {
-                if (AmandsControllerSets.ContainsKey("HealingLimbSelector") && !ActiveAmandsControllerSets.Contains("HealingLimbSelector"))
-                {
-                    ActiveAmandsControllerSets.Add("HealingLimbSelector");
-                }
-            }
-            else
-            {
-                ActiveAmandsControllerSets.Remove("HealingLimbSelector");
-            }*/
         }
         public void UpdateContextMenuBinds(bool Enabled)
         {
             ContextMenu = Enabled;
             if (Enabled)
             {
-                AmandsControllerEnableSet("ContextMenu");
+                EnableSet("ContextMenu");
             }
             else
             {
-                AmandsControllerDisableSet("ContextMenu");
+                DisableSet("ContextMenu");
             }
         }
         public void UpdateInterface(InventoryScreen inventoryScreen)
@@ -2182,10 +1814,12 @@ namespace AmandsController
             }
             if (AllGameObject != null || !InRaid) return;
 
+
             AllGameObject = new GameObject("All");
             RectTransform AllRectTransform = AllGameObject.AddComponent<RectTransform>();
             AllRectTransform.SetParent(inventoryScreen.transform);
-            AllRectTransform.position = AmandsControllerPlugin.BlockPosition.Value;//new Vector2(Screen.width / 2f, 128f);
+            AllRectTransform.pivot = new Vector2(1f,0f);
+            AllRectTransform.position = new Vector2(Screen.width, 0f) + AmandsControllerPlugin.BlockPosition.Value;
             AllRectTransform.sizeDelta = new Vector2(2560f, AmandsControllerPlugin.BlockSize.Value.y);
             HorizontalLayoutGroup AllHorizontalLayoutGroup = AllGameObject.AddComponent<HorizontalLayoutGroup>();
             AllHorizontalLayoutGroup.childForceExpandHeight = false;
@@ -2212,7 +1846,8 @@ namespace AmandsController
             ButtonBlocks[EAmandsControllerButton.A].Button = EAmandsControllerButton.A;
 
         }
-        public void AmandsControllerGeneratePressType(EAmandsControllerButton Button, bool Pressed)
+
+        public void GeneratePressType(EAmandsControllerButton Button, bool Pressed)
         {
             onAmandsControllerButtonState(Button, Pressed);
             if (AmandsControllerButtonSnapshots.ContainsKey(Button))
@@ -2279,7 +1914,7 @@ namespace AmandsController
                     }
                     else if (Binds[2].Priority != -100 || Binds[3].Priority != -100)
                     {
-                        AmandsControllerButtonTimer(Button.ToString() + time.ToString(), Button);
+                        ButtonTimer(Button.ToString() + time.ToString(), Button);
                     }
                     if (Binds[2].Priority != -100 || Binds[3].Priority != -100)
                     {
@@ -2287,78 +1922,6 @@ namespace AmandsController
                     }
                 }
             }
-            /*if (AmandsControllerButtonSnapshots.ContainsKey(Button))
-            { 
-                AmandsControllerButtonSnapshot AmandsControllerButtonSnapshot = AmandsControllerButtonSnapshots[Button];
-                if (Pressed)
-                {
-                    if (AmandsControllerButtonSnapshot.DoubleClickBind.Commands.Count != 0 && Time.time - AmandsControllerButtonSnapshot.Time <= AmandsControllerPlugin.DoubleClickDelay.Value)
-                    {
-                        AmandsControllerButton(AmandsControllerButtonSnapshot.DoubleClickBind);
-                    }
-                    AsyncHold.Remove(Button.ToString() + AmandsControllerButtonSnapshot.Time.ToString());
-                    AsyncPress.Remove(Button.ToString() + AmandsControllerButtonSnapshot.Time.ToString());
-                    AmandsControllerButtonSnapshots.Remove(Button);
-                }
-                else
-                {
-                    // Temp
-                    if (AmandsControllerButtonSnapshot.ReleaseBind.Commands.Count != 0)
-                    {
-                        AmandsControllerButton(AmandsControllerButtonSnapshot.ReleaseBind);
-                        AmandsControllerButtonSnapshots.Remove(Button);
-                    }
-                    else
-                    {
-                        // Temp
-                        if (AmandsControllerButtonSnapshot.HoldBind.Commands.Count == 0 && AmandsControllerButtonSnapshot.DoubleClickBind.Commands.Count == 0)
-                        {
-                            if (AmandsControllerButtonSnapshot.ReleaseBind.Commands.Count != 0)
-                            {
-                                AmandsControllerButton(AmandsControllerButtonSnapshot.ReleaseBind);
-                            }
-                            AmandsControllerButtonSnapshots.Remove(Button);
-                        }
-                        else if (AmandsControllerButtonSnapshot.HoldBind.Commands.Count != 0 || AmandsControllerButtonSnapshot.DoubleClickBind.Commands.Count != 0)
-                        {
-                            AsyncHold.Remove(Button.ToString() + AmandsControllerButtonSnapshot.Time.ToString());
-                        }
-                        if (AmandsControllerButtonSnapshot.DoubleClickBind.Commands.Count == 0 && AmandsControllerButtonSnapshot.ReleaseBind.Commands.Count == 0)
-                        {
-                            AsyncPress.Remove(Button.ToString() + AmandsControllerButtonSnapshot.Time.ToString());
-                            AmandsControllerButton(AmandsControllerButtonSnapshot.PressBind);
-                            AmandsControllerButtonSnapshots.Remove(Button);
-                        }
-                    }
-                }
-            }
-            else if (Pressed)
-            {
-                float time = Time.time;
-                AmandsControllerButtonBind[] Binds = GetPriorityButtonBinds(Button);
-                // Temp
-                if (Binds[1].Commands.Count != 0)
-                {
-                    AmandsControllerButtonSnapshots.Add(Button, new AmandsControllerButtonSnapshot(true, time, Binds[0], Binds[1], Binds[2], Binds[3]));
-                    AmandsControllerButton(Binds[0]);
-                }
-                else
-                {
-                    // Temp
-                    if (Binds[2].Commands.Count == 0 && Binds[3].Commands.Count == 0)
-                    {
-                        AmandsControllerButton(Binds[0]);
-                    }
-                    else if (Binds[2].Commands.Count != 0 || Binds[3].Commands.Count != 0)
-                    {
-                        AmandsControllerButtonTimer(Button.ToString() + time.ToString(), Button);
-                    }
-                    if (Binds[2].Commands.Count != 0 || Binds[3].Commands.Count != 0)
-                    {
-                        AmandsControllerButtonSnapshots.Add(Button, new AmandsControllerButtonSnapshot(true, time, Binds[0], Binds[1], Binds[2], Binds[3]));
-                    }
-                }
-            }*/
         }
         public AmandsControllerButtonBind[] GetPriorityButtonBinds(EAmandsControllerButton Button)
         {
@@ -2437,17 +2000,16 @@ namespace AmandsController
             foreach (AmandsControllerCommand AmandsControllerCommand in Bind.AmandsControllerCommands)
             {
                 if (AmandsControllerCommand.Command == EAmandsControllerCommand.None) continue;
-                DebugStuff("AmandsControllerCommand " + AmandsControllerCommand.Command.ToString() + " InputTree " + AmandsControllerCommand.InputTree.ToString() + " " + Bind.PressType.ToString());
                 switch (AmandsControllerCommand.Command)
                 {
                     case EAmandsControllerCommand.ToggleSet:
-                        AmandsControllerToggleSet(AmandsControllerCommand.AmandsControllerSet);
+                        ToggleSet(AmandsControllerCommand.AmandsControllerSet);
                         break;
                     case EAmandsControllerCommand.EnableSet:
-                        AmandsControllerEnableSet(AmandsControllerCommand.AmandsControllerSet);
+                        EnableSet(AmandsControllerCommand.AmandsControllerSet);
                         break;
                     case EAmandsControllerCommand.DisableSet:
-                        AmandsControllerDisableSet(AmandsControllerCommand.AmandsControllerSet);
+                        DisableSet(AmandsControllerCommand.AmandsControllerSet);
                         break;
                     case EAmandsControllerCommand.InputTree:
                         if (inputTree != null)
@@ -2456,7 +2018,6 @@ namespace AmandsController
                         }
                         break;
                     case EAmandsControllerCommand.QuickSelectWeapon:
-                        DebugStuff("QuickSelectWeapon");
                         break;
                     case EAmandsControllerCommand.SlowLeanLeft:
                         SlowLeanLeft = true;
@@ -2499,79 +2060,79 @@ namespace AmandsController
                         AutoMove = false;
                         break;
                     case EAmandsControllerCommand.BeginDrag:
-                        AmandsControllerBeginDrag();
+                        ControllerBeginDrag();
                         break;
                     case EAmandsControllerCommand.EndDrag:
-                        AmandsControllerEndDrag();
+                        ControllerEndDrag();
                         break;
                     case EAmandsControllerCommand.RotateDragged:
-                        AmandsControllerRotateDragged();
+                        ControllerRotateDragged();
                         break;
                     case EAmandsControllerCommand.SplitDragged:
-                        AmandsControllerSplitDragged();
+                        ControllerSplitDragged();
                         break;
                     case EAmandsControllerCommand.CancelDrag:
-                        AmandsControllerCancelDrag();
+                        ControllerCancelDrag();
                         break;
                     case EAmandsControllerCommand.Search:
-                        AmandsControllerSearch();
+                        ControllerSearch();
                         break;
                     case EAmandsControllerCommand.Use:
-                        AmandsControllerUse(false);
+                        ControllerUse(false);
                         break;
                     case EAmandsControllerCommand.UseHold:
-                        AmandsControllerUse(true);
+                        ControllerUse(true);
                         break;
                     case EAmandsControllerCommand.QuickMove:
-                        AmandsControllerQuickMove();
+                        ControllerQuickMove();
                         break;
                     case EAmandsControllerCommand.Discard:
-                        AmandsControllerDiscard();
+                        ControllerDiscard();
                         break;
                     case EAmandsControllerCommand.InterfaceBind4:
-                        AmandsControllerInterfaceBind(EBoundItem.Item4);
+                        ControllerInterfaceBind(EBoundItem.Item4);
                         break;
                     case EAmandsControllerCommand.InterfaceBind5:
-                        AmandsControllerInterfaceBind(EBoundItem.Item5);
+                        ControllerInterfaceBind(EBoundItem.Item5);
                         break;
                     case EAmandsControllerCommand.InterfaceBind6:
-                        AmandsControllerInterfaceBind(EBoundItem.Item6);
+                        ControllerInterfaceBind(EBoundItem.Item6);
                         break;
                     case EAmandsControllerCommand.InterfaceBind7:
-                        AmandsControllerInterfaceBind(EBoundItem.Item7);
+                        ControllerInterfaceBind(EBoundItem.Item7);
                         break;
                     case EAmandsControllerCommand.InterfaceBind8:
-                        AmandsControllerInterfaceBind(EBoundItem.Item8);
+                        ControllerInterfaceBind(EBoundItem.Item8);
                         break;
                     case EAmandsControllerCommand.InterfaceBind9:
-                        AmandsControllerInterfaceBind(EBoundItem.Item9);
+                        ControllerInterfaceBind(EBoundItem.Item9);
                         break;
                     case EAmandsControllerCommand.InterfaceBind10:
-                        AmandsControllerInterfaceBind(EBoundItem.Item10);
+                        ControllerInterfaceBind(EBoundItem.Item10);
                         break;
                     case EAmandsControllerCommand.ShowContextMenu:
-                        AmandsControllerShowContextMenu();
+                        ControllerShowContextMenu();
                         break;
                     case EAmandsControllerCommand.ContextMenuUse:
-                        AmandsControllerContextMenuUse();
+                        ControllerContextMenuUse();
                         break;
                     case EAmandsControllerCommand.SplitDialogAccept:
-                        AmandsControllerSplitDialogAccept();
+                        ControllerSplitDialogAccept();
                         break;
                     case EAmandsControllerCommand.SplitDialogAdd:
-                        AmandsControllerSplitDialogAdd(1);
+                        ControllerSplitDialogAdd(1);
                         break;
                     case EAmandsControllerCommand.SplitDialogSubtract:
-                        AmandsControllerSplitDialogAdd(-1);
+                        ControllerSplitDialogAdd(-1);
                         break;
                     case EAmandsControllerCommand.SplitDialogDisableAutoMove:
                         SplitDialogAutoMove = false;
                         break;
                     case EAmandsControllerCommand.PreviousTab:
-                        AmandsControllerPreviousTab();
+                        ControllerPreviousTab();
                         break;
                     case EAmandsControllerCommand.NextTab:
-                        AmandsControllerNextTab();
+                        ControllerNextTab();
                         break;
                 }
             }
@@ -2581,45 +2142,41 @@ namespace AmandsController
                 TranslateInput.Invoke(inputTree, TranslateInputInvokeParameters);
             }
         }
-        public void AmandsControllerToggleSet(string AmandsControllerSet)
+        public void ToggleSet(string AmandsControllerSet)
         {
             if (ActiveAmandsControllerSets.Contains(AmandsControllerSet))
             {
-                DebugStuff("ToggleSet Remove " + AmandsControllerSet);
                 ActiveAmandsControllerSets.Remove(AmandsControllerSet);
-                AmandsControllerLSRSButtonsCheck();
-                AmandsControllerSetState(AmandsControllerSet, false);
+                LSRSButtonsCheck();
+                ControllerSetState(AmandsControllerSet, false);
             }
             else if (AmandsControllerSets.ContainsKey(AmandsControllerSet))
             {
-                DebugStuff("ToggleSet Add " + AmandsControllerSet);
                 ActiveAmandsControllerSets.Add(AmandsControllerSet);
-                AmandsControllerLSRSButtonsCheck();
-                AmandsControllerSetState(AmandsControllerSet, true);
+                LSRSButtonsCheck();
+                ControllerSetState(AmandsControllerSet, true);
             }
         }
-        public void AmandsControllerEnableSet(string AmandsControllerSet)
+        public void EnableSet(string AmandsControllerSet)
         {
             if (AmandsControllerSets.ContainsKey(AmandsControllerSet) && !ActiveAmandsControllerSets.Contains(AmandsControllerSet))
             {
-                DebugStuff("EnableSet " + AmandsControllerSet);
                 ActiveAmandsControllerSets.Add(AmandsControllerSet);
-                AmandsControllerLSRSButtonsCheck();
-                AmandsControllerSetState(AmandsControllerSet, true);
+                LSRSButtonsCheck();
+                ControllerSetState(AmandsControllerSet, true);
             }
         }
-        public void AmandsControllerDisableSet(string AmandsControllerSet)
+        public void DisableSet(string AmandsControllerSet)
         {
-            DebugStuff("DisableSet " + AmandsControllerSet);
             ActiveAmandsControllerSets.Remove(AmandsControllerSet);
-            AmandsControllerLSRSButtonsCheck();
-            AmandsControllerSetState(AmandsControllerSet, false);
+            LSRSButtonsCheck();
+            ControllerSetState(AmandsControllerSet, false);
         }
-        public async void AmandsControllerButtonTimer(string Token, EAmandsControllerButton Button)
+        private async void ButtonTimer(string Token, EAmandsControllerButton Button)
         {
             AsyncPress.Add(Token);
             AsyncHold.Add(Token);
-            await Task.Delay((int)(Interface ? AmandsControllerPlugin.HoldDelay.Value * 500 : AmandsControllerPlugin.HoldDelay.Value * 1000));
+            await Task.Delay((int)(Interface ? AmandsControllerPlugin.HoldDelay.Value * 800 : AmandsControllerPlugin.HoldDelay.Value * 1000));
             if (AsyncHold.Contains(Token))
             {
                 AmandsControllerButton(AmandsControllerButtonSnapshots[Button].HoldBind);
@@ -2633,7 +2190,7 @@ namespace AmandsController
                 AmandsControllerButtonSnapshots.Remove(Button);
             }
         }
-        public void AmandsControllerLSRSButtonsCheck()
+        private void LSRSButtonsCheck()
         {
             LSButtons = false;
             RSButtons = false;
@@ -2647,22 +2204,22 @@ namespace AmandsController
                 if (LSUP)
                 {
                     LSUP = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.LSUP, false);
+                    GeneratePressType(EAmandsControllerButton.LSUP, false);
                 }
                 if (LSDOWN)
                 {
                     LSDOWN = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.LSRIGHT, false);
+                    GeneratePressType(EAmandsControllerButton.LSRIGHT, false);
                 }
                 if (LSLEFT)
                 {
                     LSLEFT = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.LSLEFT, false);
+                    GeneratePressType(EAmandsControllerButton.LSLEFT, false);
                 }
                 if (LSRIGHT)
                 {
                     LSRIGHT = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.LSRIGHT, false);
+                    GeneratePressType(EAmandsControllerButton.LSRIGHT, false);
                 }
             }
             if (!RSButtons)
@@ -2670,166 +2227,28 @@ namespace AmandsController
                 if (RSUP)
                 {
                     RSUP = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.RSUP, false);
+                    GeneratePressType(EAmandsControllerButton.RSUP, false);
                 }
                 if (RSDOWN)
                 {
                     RSDOWN = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.RSRIGHT, false);
+                    GeneratePressType(EAmandsControllerButton.RSRIGHT, false);
                 }
                 if (RSLEFT)
                 {
                     RSLEFT = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.RSLEFT, false);
+                    GeneratePressType(EAmandsControllerButton.RSLEFT, false);
                 }
                 if (RSRIGHT)
                 {
                     RSRIGHT = false;
-                    AmandsControllerGeneratePressType(EAmandsControllerButton.RSRIGHT, false);
+                    GeneratePressType(EAmandsControllerButton.RSRIGHT, false);
                 }
             }
         }
-        public List<string> AmandsControllerGetButtonAction(AmandsControllerButtonBind Bind)
-        {
-            List<string> Actions = new List<string>();
-            foreach (AmandsControllerCommand AmandsControllerCommand in Bind.AmandsControllerCommands)
-            {
-                if (AmandsControllerCommand.Command == EAmandsControllerCommand.None) continue;
-                switch (AmandsControllerCommand.Command)
-                {
-                    case EAmandsControllerCommand.ToggleSet:
-                        if (ActiveAmandsControllerSets.Contains(AmandsControllerCommand.AmandsControllerSet))
-                        {
-                            Actions.Add("Enable " + AmandsControllerCommand.AmandsControllerSet);
-                        }
-                        else if (AmandsControllerSets.ContainsKey(AmandsControllerCommand.AmandsControllerSet))
-                        {
-                            Actions.Add("Disable " + AmandsControllerCommand.AmandsControllerSet);
-                        }
-                        break;
-                    case EAmandsControllerCommand.EnableSet:
-                        if (AmandsControllerSets.ContainsKey(AmandsControllerCommand.AmandsControllerSet) && !ActiveAmandsControllerSets.Contains(AmandsControllerCommand.AmandsControllerSet))
-                        {
-                            Actions.Add("Enable " + AmandsControllerCommand.AmandsControllerSet);
-                        }
-                        break;
-                    case EAmandsControllerCommand.DisableSet:
-                        Actions.Add("Disable " + AmandsControllerCommand.AmandsControllerSet);
-                        break;
-                    case EAmandsControllerCommand.InputTree:
-                        Actions.Add("" + AmandsControllerCommand.InputTree);
-                        break;
-                    case EAmandsControllerCommand.QuickSelectWeapon:
-                        Actions.Add("QuickSelectWeapon");
-                        break;
-                    case EAmandsControllerCommand.SlowLeanLeft:
-                        Actions.Add("SlowLeanLeft");
-                        break;
-                    case EAmandsControllerCommand.SlowLeanRight:
-                        Actions.Add("SlowLeanRight");
-                        break;
-                    case EAmandsControllerCommand.EndSlowLean:
-                        Actions.Add("EndSlowLean");
-                        break;
-                    case EAmandsControllerCommand.RestoreLean:
-                        Actions.Add("RestoreLean");
-                        break;
-                    case EAmandsControllerCommand.InterfaceUp:
-                        Actions.Add("InterfaceUp");
-                        break;
-                    case EAmandsControllerCommand.InterfaceDown:
-                        Actions.Add("InterfaceDown");
-                        break;
-                    case EAmandsControllerCommand.InterfaceLeft:
-                        Actions.Add("InterfaceLeft");
-                        break;
-                    case EAmandsControllerCommand.InterfaceRight:
-                        Actions.Add("InterfaceRight");
-                        break;
-                    case EAmandsControllerCommand.InterfaceDisableAutoMove:
-                        Actions.Add("InterfaceDisableAutoMove");
-                        break;
-                    case EAmandsControllerCommand.BeginDrag:
-                        if (!Dragging && pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("Drag");
-                        break;
-                    case EAmandsControllerCommand.EndDrag:
-                        Actions.Add("EndDrag");
-                        break;
-                    case EAmandsControllerCommand.RotateDragged:
-                        Actions.Add("Rotate");
-                        break;
-                    case EAmandsControllerCommand.SplitDragged:
-                        Actions.Add("Split");
-                        break;
-                    case EAmandsControllerCommand.CancelDrag:
-                        Actions.Add("CancelDrag");
-                        break;
-                    case EAmandsControllerCommand.Search:
-                        Actions.Add("Search");
-                        break;
-                    case EAmandsControllerCommand.Use:
-                        Actions.Add(AmandsControllerUseAction(false));
-                        break;
-                    case EAmandsControllerCommand.UseHold:
-                        Actions.Add(AmandsControllerUseAction(true));
-                        break;
-                    case EAmandsControllerCommand.QuickMove:
-                        if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("QuickMove");
-                        break;
-                    case EAmandsControllerCommand.Discard:
-                        if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("Discard");
-                        break;
-                    case EAmandsControllerCommand.InterfaceBind4:
-                        if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("Bind4");
-                        break;
-                    case EAmandsControllerCommand.InterfaceBind5:
-                        if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("Bind5");
-                        break;
-                    case EAmandsControllerCommand.InterfaceBind6:
-                        if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("Bind6");
-                        break;
-                    case EAmandsControllerCommand.InterfaceBind7:
-                        if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("Bind7");
-                        break;
-                    case EAmandsControllerCommand.InterfaceBind8:
-                        if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("Bind8");
-                        break;
-                    case EAmandsControllerCommand.InterfaceBind9:
-                        if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("Bind9");
-                        break;
-                    case EAmandsControllerCommand.InterfaceBind10:
-                        if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("Bind10");
-                        break;
-                    case EAmandsControllerCommand.ShowContextMenu:
-                        if (!ContextMenu && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("ContextMenu");
-                        break;
-                    case EAmandsControllerCommand.ContextMenuUse:
-                        Actions.Add("Select");
-                        break;
-                    case EAmandsControllerCommand.SplitDialogAccept:
-                        Actions.Add("Accept");
-                        break;
-                    case EAmandsControllerCommand.SplitDialogAdd:
-                        Actions.Add("SplitDialogAdd");
-                        break;
-                    case EAmandsControllerCommand.SplitDialogSubtract:
-                        Actions.Add("SplitDialogSubtract");
-                        break;
-                    case EAmandsControllerCommand.SplitDialogDisableAutoMove:
-                        Actions.Add("SplitDialogDisableAutoMove");
-                        break;
-                    case EAmandsControllerCommand.PreviousTab:
-                        Actions.Add("PreviousTab");
-                        break;
-                    case EAmandsControllerCommand.NextTab:
-                        Actions.Add("NextTab");
-                        break;
-                }
-            }
-            return Actions;
-        }
-        // Controller UI
-        public void ResetAllCurrent()
+
+        // UI Navigation
+        private void ResetAllCurrent()
         {
             currentGridView = null;
             currentModSlotView = null;
@@ -2843,12 +2262,10 @@ namespace AmandsController
             currentDogtagSlotView = null;
             currentSpecialSlotSlotView = null;
             currentSearchButton = null;
-            currentSimpleContextMenuButton = null;
+            currentContextMenuButton = null;
         }
-        public bool FindGridView(Vector2 Position)
+        private bool FindGridView(Vector2 Position)
         {
-            tglobalPosition = Position;
-            hitPointDebug = Position;
             RectTransform rectTransform;
             // GridViews Window stuff inside needs to be out
             if (containedGridsViews.Count != 0)
@@ -2875,8 +2292,6 @@ namespace AmandsController
                 if (bestContainedGridsView != null)
                 {
                     rectTransform = bestContainedGridsView.GetComponent<RectTransform>();
-                    hitDebug = new Vector2(bestContainedGridsView.transform.position.x, bestContainedGridsView.transform.position.y - (rectTransform.sizeDelta.y * (rectTransform.pivot.y - 1f) * ScreenRatio));
-                    hitSizeDebug = rectTransform.sizeDelta * ScreenRatio;
                     int GridWidth;
                     int GridHeight;
 
@@ -2890,8 +2305,6 @@ namespace AmandsController
                     {
                         GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
                         GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
-                        //GridWidth = gridView.Grid.GridWidth.Value;
-                        //GridHeight = gridView.Grid.GridHeight.Value;
 
                         if (GridWidth == 1 && GridHeight == 1)
                         {
@@ -2965,8 +2378,6 @@ namespace AmandsController
                 if (bestItemSpecificationPanel != null)
                 {
                     rectTransform = bestItemSpecificationPanel.GetComponent<RectTransform>();
-                    hitDebug = new Vector2(bestItemSpecificationPanel.transform.position.x - ((rectTransform.sizeDelta.x / 2) * ScreenRatio), bestItemSpecificationPanel.transform.position.y + ((rectTransform.sizeDelta.y / 2) * ScreenRatio));
-                    hitSizeDebug = rectTransform.sizeDelta * ScreenRatio;
 
                     float distance;
                     float bestDistance = 999999f;
@@ -3007,11 +2418,6 @@ namespace AmandsController
                         Vector2 position;
                         int GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
                         int GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
-                        //int GridWidth = gridView.Grid.GridWidth.Value;
-                        //int GridHeight = gridView.Grid.GridHeight.Value;
-
-                        hitDebug = gridView.transform.position;
-                        hitSizeDebug = rectTransform.sizeDelta * ScreenRatio;
 
                         if (GridWidth == 1 && GridHeight == 1)
                         {
@@ -3036,7 +2442,6 @@ namespace AmandsController
                         ResetAllCurrent();
                         currentGridView = gridView;
                         gridViewLocation = new Vector2Int(Mathf.RoundToInt((position.x + (GridSize / 2f)) / GridSize), -Mathf.RoundToInt((position.y - (GridSize / 2f)) / GridSize));
-                        DebugStuff(gridViewLocation.ToString());
                         globalPosition.x = gridView.transform.position.x + (GridSize * gridViewLocation.x) - (GridSize / 2f);
                         globalPosition.y = gridView.transform.position.y - (GridSize * gridViewLocation.y) + (GridSize / 2f);
                         return true;
@@ -3053,11 +2458,6 @@ namespace AmandsController
                 {
                     int GridWidth = Traverse.Create(Traverse.Create(tradingTableGridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
                     int GridHeight = Traverse.Create(Traverse.Create(tradingTableGridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
-                    //int GridWidth = tradingTableGridView.Grid.GridWidth.Value;
-                    //int GridHeight = tradingTableGridView.Grid.GridHeight.Value;
-
-                    hitDebug = position;
-                    hitSizeDebug = rectTransform.sizeDelta * ScreenRatio;
 
                     if (GridWidth == 1 && GridHeight == 1)
                     {
@@ -3082,7 +2482,6 @@ namespace AmandsController
                     ResetAllCurrent();
                     currentTradingTableGridView = tradingTableGridView;
                     gridViewLocation = new Vector2Int(Mathf.RoundToInt((position.x + (GridSize / 2f)) / GridSize), -Mathf.RoundToInt((position.y - (GridSize / 2f)) / GridSize));
-                    DebugStuff(gridViewLocation.ToString());
                     size = currentTradingTableGridView.GetComponent<RectTransform>().sizeDelta * ScreenRatio;
                     globalPosition.x = (currentTradingTableGridView.transform.position.x - (size.x / 2f)) + (GridSize * gridViewLocation.x) - (GridSize / 2f);
                     globalPosition.y = (currentTradingTableGridView.transform.position.y + (size.y / 2f)) - (GridSize * gridViewLocation.y) + (GridSize / 2f);
@@ -3095,21 +2494,11 @@ namespace AmandsController
             {
                 foreach (SlotView slotView in equipmentSlotViews)
                 {
-                    //if (Position.x > slotView.transform.position.x - (SlotSize / 2f) && Position.x < slotView.transform.position.x + (SlotSize / 2f) && Position.y < slotView.transform.position.y && Position.y > (slotView.transform.position.y - SlotSize)
                     if (Position.x > slotView.transform.position.x && Position.x < slotView.transform.position.x + SlotSize && Position.y < slotView.transform.position.y && Position.y > (slotView.transform.position.y - SlotSize))
                     {
-                        // Debug start
-                        Vector2 position;
-                        position.x = slotView.transform.position.x;// - SlotSize / 2f;
-                        position.y = slotView.transform.position.y;
-                        hitDebug = position;
-                        hitSizeDebug = new Vector2(SlotSize, SlotSize);
-                        DebugStuff("Hitdection hit Equipment Slot");
-                        // Debug end
                         ResetAllCurrent();
                         currentEquipmentSlotView = slotView;
                         gridViewLocation = new Vector2Int(1, 1);
-                        DebugStuff(gridViewLocation.ToString());
                         globalPosition.x = currentEquipmentSlotView.transform.position.x + (SlotSize / 2f);
                         globalPosition.y = currentEquipmentSlotView.transform.position.y - (SlotSize / 2f);
                         return true;
@@ -3121,21 +2510,11 @@ namespace AmandsController
             {
                 foreach (SlotView slotView in weaponsSlotViews)
                 {
-                    //if (Position.x > slotView.transform.position.x - (157.0811f * ScreenRatio) && Position.x < slotView.transform.position.x + (157.0811f * ScreenRatio) && Position.y < slotView.transform.position.y && Position.y > (slotView.transform.position.y - SlotSize))
                     if (Position.x > slotView.transform.position.x && Position.x < slotView.transform.position.x + (314.1622f * ScreenRatio) && Position.y < slotView.transform.position.y && Position.y > (slotView.transform.position.y - SlotSize))
                     {
-                        // Debug start
-                        Vector2 position;
-                        position.x = slotView.transform.position.x;// - (157.0811f * ScreenRatio);
-                        position.y = slotView.transform.position.y;
-                        hitDebug = position;
-                        hitSizeDebug = new Vector2((314.1622f * ScreenRatio), SlotSize);
-                        DebugStuff("Hitdection hit Weapon Slot");
-                        // Debug end
                         ResetAllCurrent();
                         currentWeaponsSlotView = slotView;
                         gridViewLocation = new Vector2Int(1, 1);
-                        DebugStuff(gridViewLocation.ToString());
                         globalPosition.x = currentWeaponsSlotView.transform.position.x + (157.0811f * ScreenRatio);
                         globalPosition.y = currentWeaponsSlotView.transform.position.y - (SlotSize / 2f);
                         return true;
@@ -3147,21 +2526,11 @@ namespace AmandsController
             {
                 if (armbandSlotView != null)
                 {
-                    //if (Position.x > armbandSlotView.transform.position.x - (62.5f * ScreenRatio) && Position.x < armbandSlotView.transform.position.x + (62.5f * ScreenRatio) && Position.y < armbandSlotView.transform.position.y && Position.y > (armbandSlotView.transform.position.y - (64f * ScreenRatio)))
                     if (Position.x > armbandSlotView.transform.position.x && Position.x < armbandSlotView.transform.position.x + SlotSize && Position.y < armbandSlotView.transform.position.y && Position.y > (armbandSlotView.transform.position.y - (64f * ScreenRatio)))
                     {
-                        // Debug start
-                        Vector2 position;
-                        position.x = armbandSlotView.transform.position.x;// - (62.5f * ScreenRatio);
-                        position.y = armbandSlotView.transform.position.y;
-                        hitDebug = position;
-                        hitSizeDebug = new Vector2(SlotSize, (64f * ScreenRatio));
-                        DebugStuff("Hitdection hit Armband Slot");
-                        // Debug end
                         ResetAllCurrent();
                         currentArmbandSlotView = armbandSlotView;
                         gridViewLocation = new Vector2Int(1, 1);
-                        DebugStuff(gridViewLocation.ToString());
                         globalPosition.x = currentArmbandSlotView.transform.position.x + (SlotSize / 2f);
                         globalPosition.y = currentArmbandSlotView.transform.position.y - (32f * ScreenRatio);
                         return true;
@@ -3175,18 +2544,9 @@ namespace AmandsController
                 {
                     if (Position.x > slotView.transform.position.x && Position.x < slotView.transform.position.x + SlotSize && Position.y < slotView.transform.position.y && Position.y > (slotView.transform.position.y - SlotSize))
                     {
-                        // Debug start
-                        Vector2 position;
-                        position.x = slotView.transform.position.x;
-                        position.y = slotView.transform.position.y;
-                        hitDebug = position;
-                        hitSizeDebug = new Vector2(SlotSize, SlotSize);
-                        DebugStuff("Hitdection hit Container Slot");
-                        // Debug end
                         ResetAllCurrent();
                         currentContainersSlotView = slotView;
                         gridViewLocation = new Vector2Int(1, 1);
-                        DebugStuff(gridViewLocation.ToString());
                         globalPosition.x = currentContainersSlotView.transform.position.x + (SlotSize / 2f);
                         globalPosition.y = currentContainersSlotView.transform.position.y - (SlotSize / 2f);
                         return true;
@@ -3201,18 +2561,9 @@ namespace AmandsController
                 {
                     if (Position.x > slotView.transform.position.x && Position.x < slotView.transform.position.x + SlotSize && Position.y < slotView.transform.position.y && Position.y > (slotView.transform.position.y - SlotSize))
                     {
-                        // Debug start
-                        Vector2 position;
-                        position.x = slotView.transform.position.x;// - SlotSize / 2f;
-                        position.y = slotView.transform.position.y;
-                        hitDebug = position;
-                        hitSizeDebug = new Vector2(SlotSize, SlotSize);
-                        DebugStuff("Hitdection hit Equipment Slot");
-                        // Debug end
                         ResetAllCurrent();
                         currentEquipmentSlotView = slotView;
                         gridViewLocation = new Vector2Int(1, 1);
-                        DebugStuff(gridViewLocation.ToString());
                         globalPosition.x = currentEquipmentSlotView.transform.position.x + (SlotSize / 2f);
                         globalPosition.y = currentEquipmentSlotView.transform.position.y - (SlotSize / 2f);
                         return true;
@@ -3226,18 +2577,9 @@ namespace AmandsController
                 {
                     if (Position.x > slotView.transform.position.x && Position.x < slotView.transform.position.x + (314.1622f * ScreenRatio) && Position.y < slotView.transform.position.y && Position.y > (slotView.transform.position.y - SlotSize))
                     {
-                        // Debug start
-                        Vector2 position;
-                        position.x = slotView.transform.position.x;// - (133.0724f * ScreenRatio);
-                        position.y = slotView.transform.position.y;
-                        hitDebug = position;
-                        hitSizeDebug = new Vector2((314.1622f * ScreenRatio), SlotSize);
-                        DebugStuff("Hitdection hit Weapon Slot");
-                        // Debug end
                         ResetAllCurrent();
                         currentWeaponsSlotView = slotView;
                         gridViewLocation = new Vector2Int(1, 1);
-                        DebugStuff(gridViewLocation.ToString());
                         globalPosition.x = currentWeaponsSlotView.transform.position.x + (157.0811f * ScreenRatio);
                         globalPosition.y = currentWeaponsSlotView.transform.position.y - (SlotSize / 2f);
                         return true;
@@ -3251,18 +2593,9 @@ namespace AmandsController
                 {
                     if (Position.x > lootArmbandSlotView.transform.position.x && Position.x < lootArmbandSlotView.transform.position.x + SlotSize && Position.y < lootArmbandSlotView.transform.position.y && Position.y > (lootArmbandSlotView.transform.position.y - (64f * ScreenRatio)))
                     {
-                        // Debug start
-                        Vector2 position;
-                        position.x = lootArmbandSlotView.transform.position.x;// - (62.5f * ScreenRatio);
-                        position.y = lootArmbandSlotView.transform.position.y;
-                        hitDebug = position;
-                        hitSizeDebug = new Vector2(SlotSize, (64f * ScreenRatio));
-                        DebugStuff("Hitdection hit Armband Slot");
-                        // Debug end
                         ResetAllCurrent();
                         currentArmbandSlotView = lootArmbandSlotView;
                         gridViewLocation = new Vector2Int(1, 1);
-                        DebugStuff(gridViewLocation.ToString());
                         globalPosition.x = currentArmbandSlotView.transform.position.x + (SlotSize / 2f);
                         globalPosition.y = currentArmbandSlotView.transform.position.y - (32f * ScreenRatio);
                         return true;
@@ -3276,18 +2609,9 @@ namespace AmandsController
                 {
                     if (Position.x > slotView.transform.position.x && Position.x < slotView.transform.position.x + SlotSize && Position.y < slotView.transform.position.y && Position.y > (slotView.transform.position.y - SlotSize))
                     {
-                        // Debug start
-                        Vector2 position;
-                        position.x = slotView.transform.position.x;
-                        position.y = slotView.transform.position.y;
-                        hitDebug = position;
-                        hitSizeDebug = new Vector2(SlotSize, SlotSize);
-                        DebugStuff("Hitdection hit Container Slot");
-                        // Debug end
                         ResetAllCurrent();
                         currentContainersSlotView = slotView;
                         gridViewLocation = new Vector2Int(1, 1);
-                        DebugStuff(gridViewLocation.ToString());
                         globalPosition.x = currentContainersSlotView.transform.position.x + (SlotSize / 2f);
                         globalPosition.y = currentContainersSlotView.transform.position.y - (SlotSize / 2f);
                         return true;
@@ -3296,7 +2620,7 @@ namespace AmandsController
             }
             return false;
         }
-        public bool FindGridWindow(Vector2 Position)
+        private bool FindGridWindow(Vector2 Position)
         {
             RectTransform rectTransform;
 
@@ -3329,8 +2653,6 @@ namespace AmandsController
                 if (bestContainedGridsView != null)
                 {
                     rectTransform = bestContainedGridsView.GetComponent<RectTransform>();
-                    hitDebug = new Vector2(bestContainedGridsView.transform.position.x, bestContainedGridsView.transform.position.y - (rectTransform.sizeDelta.y * (rectTransform.pivot.y - 1f) * ScreenRatio));
-                    hitSizeDebug = rectTransform.sizeDelta * ScreenRatio;
                     int GridWidth;
                     int GridHeight;
 
@@ -3344,8 +2666,6 @@ namespace AmandsController
                     {
                         GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
                         GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
-                        //GridWidth = gridView.Grid.GridWidth.Value;
-                        //GridHeight = gridView.Grid.GridHeight.Value;
 
                         if (GridWidth == 1 && GridHeight == 1)
                         {
@@ -3420,8 +2740,6 @@ namespace AmandsController
                 if (bestItemSpecificationPanel != null)
                 {
                     rectTransform = bestItemSpecificationPanel.GetComponent<RectTransform>();
-                    hitDebug = new Vector2(bestItemSpecificationPanel.transform.position.x - ((rectTransform.sizeDelta.x / 2) * ScreenRatio), bestItemSpecificationPanel.transform.position.y + ((rectTransform.sizeDelta.y / 2) * ScreenRatio));
-                    hitSizeDebug = rectTransform.sizeDelta * ScreenRatio;
 
                     float distance;
                     float bestDistance = 999999f;
@@ -3452,7 +2770,7 @@ namespace AmandsController
             }
             return false;
         }
-        public bool FindScrollRectNoDrag(Vector2 Position)
+        private bool FindScrollRectNoDrag(Vector2 Position)
         {
             currentScrollRectNoDrag = null;
             currentScrollRectNoDragRectTransform = null;
@@ -3461,10 +2779,8 @@ namespace AmandsController
             Vector2 position;
             foreach (ScrollRectNoDrag scrollRectNoDrag in scrollRectNoDrags)
             {
-                DebugStuff("scrollRectNoDrag " + scrollRectNoDrag.name);
                 rectTransform = scrollRectNoDrag.GetComponent<RectTransform>();
-                DebugStuff("pivot.x " + rectTransform.pivot.x);
-                position = new Vector2(rectTransform.position.x + rectTransform.rect.x, rectTransform.position.y - (rectTransform.rect.height * (rectTransform.pivot.y - 1f)));
+                position = new Vector2(rectTransform.position.x + (rectTransform.rect.x * ScreenRatio), rectTransform.position.y - ((rectTransform.rect.height * (rectTransform.pivot.y - 1f)) * ScreenRatio));
                 if (Position.x > position.x && Position.x < (position.x + (rectTransform.rect.width * ScreenRatio)) && Position.y < position.y && Position.y > (position.y - (rectTransform.rect.height * ScreenRatio)))
                 {
                     currentScrollRectNoDrag = scrollRectNoDrag;
@@ -3474,8 +2790,7 @@ namespace AmandsController
                 else
                 {
                     RectTransform rectTransform2 = scrollRectNoDrag.content;
-                    DebugStuff("pivot.x " + rectTransform2.pivot.x);
-                    position = new Vector2(rectTransform2.position.x + rectTransform2.rect.x, rectTransform2.position.y - (rectTransform2.rect.height * (rectTransform2.pivot.y - 1f)));
+                    position = new Vector2(rectTransform2.position.x + (rectTransform2.rect.x * ScreenRatio), rectTransform2.position.y - ((rectTransform2.rect.height * (rectTransform2.pivot.y - 1f)) * ScreenRatio));
                     if (Position.x > position.x && Position.x < (position.x + (rectTransform2.rect.width * ScreenRatio)) && Position.y < position.y && Position.y > (position.y - (rectTransform2.rect.height * ScreenRatio)))
                     {
                         currentScrollRectNoDrag = scrollRectNoDrag;
@@ -3490,7 +2805,7 @@ namespace AmandsController
         {
             lastDirection = direction;
 
-            AmandsControllerDisableSet("SearchButton");
+            DisableSet("SearchButton");
 
             if (SearchButtonImage != null)
             {
@@ -3525,19 +2840,19 @@ namespace AmandsController
             TradingTableGridView bestTradingTableGridView = null;
             ContainedGridsView bestContainedGridsView = null;
             SearchButton bestSearchButton = null;
-            SimpleContextMenuButton bestSimpleContextMenuButton = null;
+            ContextMenuButton bestContextMenuButton = null;
             Vector2Int bestGridViewLocation = Vector2Int.one;
 
             // Exclusive SimpleContextMenuButton Blind Search
-            if (simpleContextMenuButtons.Count > 0)
+            if (contextMenuButtons.Count > 0)
             {
                 UpdateGlobalPosition();
-                foreach (SimpleContextMenuButton simpleContextMenuButton in simpleContextMenuButtons)
+                foreach (ContextMenuButton contextMenuButton in contextMenuButtons)
                 {
-                    if (simpleContextMenuButton == null || simpleContextMenuButton == currentSimpleContextMenuButton) continue;
+                    if (contextMenuButton == null || contextMenuButton == currentContextMenuButton) continue;
 
-                    position.x = simpleContextMenuButton.transform.position.x;
-                    position.y = simpleContextMenuButton.transform.position.y;
+                    position.x = contextMenuButton.transform.position.x;
+                    position.y = contextMenuButton.transform.position.y;
 
                     dot = direction == Vector2Int.zero ? 1f : Vector2.Dot((globalPosition - position).normalized, -direction);
                     distance = Vector2.Distance(globalPosition, position);
@@ -3546,17 +2861,17 @@ namespace AmandsController
                     if (score < bestScore && dot > 0.4f)
                     {
                         bestScore = score;
-                        bestSimpleContextMenuButton = simpleContextMenuButton;
+                        bestContextMenuButton = contextMenuButton;
                     }
                 }
-                if (bestSimpleContextMenuButton == null) return;
-                if ((currentSimpleContextMenuButton != null && currentSimpleContextMenuButton.gameObject.activeSelf))
+                if (bestContextMenuButton == null) return;
+                if ((currentContextMenuButton != null && currentContextMenuButton.gameObject.activeSelf))
                 {
-                    currentSimpleContextMenuButton.OnPointerExit(null);
+                    currentContextMenuButton.OnPointerExit(null);
                 }
-                currentSimpleContextMenuButton = bestSimpleContextMenuButton;
+                currentContextMenuButton = bestContextMenuButton;
                 UpdateGlobalPosition();
-                currentSimpleContextMenuButton.OnPointerEnter(null);
+                currentContextMenuButton.OnPointerEnter(null);
                 return;
             }
 
@@ -3575,7 +2890,6 @@ namespace AmandsController
                 GridHeight = Traverse.Create(Traverse.Create(currentGridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
             }
             if ((currentGridView != null && currentGridView.gameObject.activeSelf) && gridViewLocation.x + direction.x >= 1 && gridViewLocation.x + direction.x <= GridWidth && gridViewLocation.y - direction.y >= 1 && gridViewLocation.y - direction.y <= GridHeight)
-            //if ((currentGridView != null && currentGridView.gameObject.activeSelf) && gridViewLocation.x + direction.x >= 1 && gridViewLocation.x + direction.x <= currentGridView.Grid.GridWidth.Value && gridViewLocation.y - direction.y >= 1 && gridViewLocation.y - direction.y <= currentGridView.Grid.GridHeight.Value)
             {
                 gridViewLocation.x += direction.x;
                 gridViewLocation.y -= direction.y;
@@ -3594,7 +2908,6 @@ namespace AmandsController
                 GridHeight = Traverse.Create(Traverse.Create(currentTradingTableGridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
             }
             if ((currentTradingTableGridView != null && currentTradingTableGridView.gameObject.activeSelf) && gridViewLocation.x + direction.x >= 1 && gridViewLocation.x + direction.x <= GridWidth && gridViewLocation.y - direction.y >= 1 && gridViewLocation.y - direction.y <= GridHeight)
-            //if ((currentTradingTableGridView != null && currentTradingTableGridView.gameObject.activeSelf) && gridViewLocation.x + direction.x >= 1 && gridViewLocation.x + direction.x <= currentTradingTableGridView.Grid.GridWidth.Value && gridViewLocation.y - direction.y >= 1 && gridViewLocation.y - direction.y <= currentTradingTableGridView.Grid.GridHeight.Value)
             {
                 gridViewLocation.x += direction.x;
                 gridViewLocation.y -= direction.y;
@@ -3619,8 +2932,6 @@ namespace AmandsController
 
                     GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
                     GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
-                    //GridWidth = gridView.Grid.GridWidth.Value;
-                    //GridHeight = gridView.Grid.GridHeight.Value;
 
                     if (GridWidth == 1 && GridHeight == 1)
                     {
@@ -3743,8 +3054,6 @@ namespace AmandsController
 
                 GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
                 GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
-                //GridWidth = gridView.Grid.GridWidth.Value;
-                //GridHeight = gridView.Grid.GridHeight.Value;
 
                 if (GridWidth == 1 && GridHeight == 1)
                 {
@@ -3799,8 +3108,6 @@ namespace AmandsController
 
                     GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
                     GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
-                    //GridWidth = gridView.Grid.GridWidth.Value;
-                    //GridHeight = gridView.Grid.GridHeight.Value;
 
                     if (GridWidth == 1 && GridHeight == 1)
                     {
@@ -3842,7 +3149,7 @@ namespace AmandsController
                         bestTradingTableGridView = null;
                         bestContainedGridsView = containedGridsView;
                         bestSearchButton = null;
-                        bestSimpleContextMenuButton = null;
+                        bestContextMenuButton = null;
                         bestGridViewLocation = new Vector2Int(Mathf.RoundToInt((position.x + (GridSize / 2f)) / GridSize), -Mathf.RoundToInt((position.y - (GridSize / 2f)) / GridSize));
                     }
                 }
@@ -3855,8 +3162,6 @@ namespace AmandsController
 
                 GridWidth = Traverse.Create(Traverse.Create(tradingTableGridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
                 GridHeight = Traverse.Create(Traverse.Create(tradingTableGridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
-                //GridWidth = tradingTableGridView.Grid.GridWidth.Value;
-                //GridHeight = tradingTableGridView.Grid.GridHeight.Value;
 
                 position.x = Mathf.Clamp(globalPosition.x - positionTradingTableGridView.x, GridSize / 2f, (GridSize * GridWidth) - (GridSize / 2f));
                 position.y = -Mathf.Clamp(positionTradingTableGridView.y - globalPosition.y, GridSize / 2f, (GridSize * GridHeight) - (GridSize / 2f));
@@ -3880,7 +3185,7 @@ namespace AmandsController
                     bestTradingTableGridView = tradingTableGridView;
                     bestContainedGridsView = null;
                     bestSearchButton = null;
-                    bestSimpleContextMenuButton = null;
+                    bestContextMenuButton = null;
                     bestGridViewLocation = new Vector2Int(Mathf.RoundToInt((position.x + (GridSize / 2f)) / GridSize), -Mathf.RoundToInt((position.y - (GridSize / 2f)) / GridSize));
                 }
             }
@@ -4222,8 +3527,6 @@ namespace AmandsController
             {
                 GridWidth = Traverse.Create(Traverse.Create(SimpleStashGridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
                 GridHeight = Traverse.Create(Traverse.Create(SimpleStashGridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
-                //GridWidth = SimpleStashGridView.Grid.GridWidth.Value;
-                //GridHeight = SimpleStashGridView.Grid.GridHeight.Value;
 
                 if (GridWidth == 1 && GridHeight == 1)
                 {
@@ -4294,7 +3597,7 @@ namespace AmandsController
 
             if ((currentSearchButton != null && currentSearchButton.gameObject.activeSelf))
             {
-                AmandsControllerEnableSet("SearchButton");
+                EnableSet("SearchButton");
                 SearchButtonImage = currentSearchButton.GetComponent<Image>();
                 if (SearchButtonImage != null)
                 {
@@ -4309,7 +3612,7 @@ namespace AmandsController
         }
         public void ControllerUIMoveToClosest(bool Skip)
         {
-            AmandsControllerDisableSet("SearchButton");
+            DisableSet("SearchButton");
 
             if (SearchButtonImage != null)
             {
@@ -4342,7 +3645,6 @@ namespace AmandsController
             TradingTableGridView bestTradingTableGridView = null;
             ContainedGridsView bestContainedGridsView = null;
             SearchButton bestSearchButton = null;
-            SimpleContextMenuButton bestSimpleContextMenuButton = null;
             Vector2Int bestGridViewLocation = Vector2Int.one;
 
             // GlobalPosition
@@ -4358,8 +3660,6 @@ namespace AmandsController
 
                 GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
                 GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
-                //GridWidth = gridView.Grid.GridWidth.Value;
-                //GridHeight = gridView.Grid.GridHeight.Value;
 
                 if (GridWidth == 1 && GridHeight == 1)
                 {
@@ -4412,8 +3712,6 @@ namespace AmandsController
 
                     GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
                     GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
-                    //GridWidth = gridView.Grid.GridWidth.Value;
-                    //GridHeight = gridView.Grid.GridHeight.Value;
 
                     if (GridWidth == 1 && GridHeight == 1)
                     {
@@ -4453,7 +3751,6 @@ namespace AmandsController
                         bestTradingTableGridView = null;
                         bestContainedGridsView = containedGridsView;
                         bestSearchButton = null;
-                        bestSimpleContextMenuButton = null;
                         bestGridViewLocation = new Vector2Int(Mathf.RoundToInt((position.x + (GridSize / 2f)) / GridSize), -Mathf.RoundToInt((position.y - (GridSize / 2f)) / GridSize));
                     }
                 }
@@ -4466,8 +3763,6 @@ namespace AmandsController
 
                 GridWidth = Traverse.Create(Traverse.Create(tradingTableGridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
                 GridHeight = Traverse.Create(Traverse.Create(tradingTableGridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
-                //GridWidth = tradingTableGridView.Grid.GridWidth.Value;
-                //GridHeight = tradingTableGridView.Grid.GridHeight.Value;
 
                 position.x = Mathf.Clamp(globalPosition.x - positionTradingTableGridView.x, GridSize / 2f, (GridSize * GridWidth) - (GridSize / 2f));
                 position.y = -Mathf.Clamp(positionTradingTableGridView.y - globalPosition.y, GridSize / 2f, (GridSize * GridHeight) - (GridSize / 2f));
@@ -4489,7 +3784,6 @@ namespace AmandsController
                     bestTradingTableGridView = tradingTableGridView;
                     bestContainedGridsView = null;
                     bestSearchButton = null;
-                    bestSimpleContextMenuButton = null;
                     bestGridViewLocation = new Vector2Int(Mathf.RoundToInt((position.x + (GridSize / 2f)) / GridSize), -Mathf.RoundToInt((position.y - (GridSize / 2f)) / GridSize));
                 }
             }
@@ -4807,8 +4101,6 @@ namespace AmandsController
             {
                 GridWidth = Traverse.Create(Traverse.Create(SimpleStashGridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
                 GridHeight = Traverse.Create(Traverse.Create(SimpleStashGridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
-                //GridWidth = SimpleStashGridView.Grid.GridWidth.Value;
-                //GridHeight = SimpleStashGridView.Grid.GridHeight.Value;
 
                 if (GridWidth == 1 && GridHeight == 1)
                 {
@@ -4877,7 +4169,7 @@ namespace AmandsController
 
             if ((currentSearchButton != null && currentSearchButton.gameObject.activeSelf))
             {
-                AmandsControllerEnableSet("SearchButton");
+                EnableSet("SearchButton");
                 SearchButtonImage = currentSearchButton.GetComponent<Image>();
                 if (SearchButtonImage != null)
                 {
@@ -4889,13 +4181,6 @@ namespace AmandsController
             FindGridWindow(globalPosition);
             // OnMove
             ControllerUIOnMove(Vector2Int.zero, globalPosition);
-        }
-        public void ControllerUIOnMove(Vector2Int direction, Vector2 position)
-        {
-            FindScrollRectNoDrag(position);
-            AmandsControllerOnPointerMove();
-            AmandsControllerOnDrag();
-            UpdateSelector();
         }
         public void ControllerUIMoveSnapshot()
         {
@@ -4933,9 +4218,72 @@ namespace AmandsController
             // OnMove
             ControllerUIOnMove(Vector2Int.zero, globalPosition);
         }
-        public EAmandsControllerCurrentUI GetAmandsControllerCurrentUI()
+        private void ControllerUIOnMove(Vector2Int direction, Vector2 position)
         {
-            if ((currentSimpleContextMenuButton != null && currentSimpleContextMenuButton.gameObject.activeSelf))
+            FindScrollRectNoDrag(position);
+            ControllerOnPointerMove();
+            ControllerOnDrag();
+            UpdateSelector();
+        }
+        public void UpdateGlobalPosition()
+        {
+            switch (GetControllerCurrentUI())
+            {
+                case EAmandsControllerCurrentUI.GridView:
+                    globalPosition.x = currentGridView.transform.position.x + (GridSize * gridViewLocation.x) - (GridSize / 2f);
+                    globalPosition.y = currentGridView.transform.position.y - (GridSize * gridViewLocation.y) + (GridSize / 2f);
+                    //globalSize = new Vector2(GridSize, GridSize) * ScreenRatio;
+                    break;
+                case EAmandsControllerCurrentUI.TradingTableGridView:
+                    Vector2 size = currentTradingTableGridView.GetComponent<RectTransform>().sizeDelta * ScreenRatio;
+                    globalPosition.x = (currentTradingTableGridView.transform.position.x - (size.x / 2f)) + (GridSize * gridViewLocation.x) - (GridSize / 2f);
+                    globalPosition.y = (currentTradingTableGridView.transform.position.y + (size.y / 2f)) - (GridSize * gridViewLocation.y) + (GridSize / 2f);
+                    //globalSize = new Vector2(GridSize, GridSize) * ScreenRatio;
+                    break;
+                case EAmandsControllerCurrentUI.ModSlotView:
+                    globalPosition = currentModSlotView.transform.position;
+                    //globalSize = new Vector2(GridSize, GridSize) * ScreenRatio;
+                    break;
+                case EAmandsControllerCurrentUI.EquipmentSlotView:
+                    globalPosition = new Vector2(currentEquipmentSlotView.transform.position.x + (SlotSize / 2f), currentEquipmentSlotView.transform.position.y - (SlotSize / 2f));
+                    //globalSize = new Vector2(SlotSize, SlotSize) * ScreenRatio;
+                    break;
+                case EAmandsControllerCurrentUI.WeaponsSlotView:
+                    globalPosition = new Vector2(currentWeaponsSlotView.transform.position.x + (157.0811f * ScreenRatio) - 2f, currentWeaponsSlotView.transform.position.y - (SlotSize / 2f));
+                    //globalSize = new Vector2(157.0811f * ScreenRatio * 2f, SlotSize) * ScreenRatio;
+                    break;
+                case EAmandsControllerCurrentUI.ArmbandSlotView:
+                    globalPosition = new Vector2(currentArmbandSlotView.transform.position.x + (SlotSize / 2f), currentArmbandSlotView.transform.position.y - (32f * ScreenRatio));
+                    //globalSize = new Vector2(SlotSize, 32f * ScreenRatio * 2f) * ScreenRatio;
+                    break;
+                case EAmandsControllerCurrentUI.ContainersSlotView:
+                    globalPosition = new Vector2(currentContainersSlotView.transform.position.x + (SlotSize / 2f), currentContainersSlotView.transform.position.y - (SlotSize / 2f));
+                    //globalSize = new Vector2(SlotSize, SlotSize) * ScreenRatio;
+                    break;
+                case EAmandsControllerCurrentUI.DogtagSlotView:
+                    globalPosition = new Vector2(currentDogtagSlotView.transform.position.x - GridSize - (GridSize / 2f), currentDogtagSlotView.transform.position.y - (GridSize / 2f));
+                    //globalSize = new Vector2(GridSize, GridSize) * ScreenRatio;
+                    break;
+                case EAmandsControllerCurrentUI.SpecialSlotSlotView:
+                    globalPosition.x = currentSpecialSlotSlotView.transform.position.x + (GridSize / 2f);
+                    globalPosition.y = currentSpecialSlotSlotView.transform.position.y - (GridSize / 2f);
+                    //globalSize = new Vector2(GridSize, GridSize) * ScreenRatio;
+                    break;
+                case EAmandsControllerCurrentUI.SearchButton:
+                    globalPosition.x = currentSearchButton.transform.position.x;
+                    globalPosition.y = currentSearchButton.transform.position.y;
+                    //globalSize = Vector2.zero;
+                    break;
+                case EAmandsControllerCurrentUI.ContextMenuButton:
+                    globalPosition.x = currentContextMenuButton.transform.position.x;
+                    globalPosition.y = currentContextMenuButton.transform.position.y;
+                    //globalSize = Vector2.zero;
+                    break;
+            }
+        }
+        public EAmandsControllerCurrentUI GetControllerCurrentUI()
+        {
+            if ((currentContextMenuButton != null && currentContextMenuButton.gameObject.activeSelf))
             {
                 return EAmandsControllerCurrentUI.ContextMenuButton;
             }
@@ -4981,61 +4329,61 @@ namespace AmandsController
             }
             return EAmandsControllerCurrentUI.None;
         }
-        public void UpdateGlobalPosition()
+        public void ControllerUISelect()
         {
-            switch (GetAmandsControllerCurrentUI())
+            ResetAllCurrent();
+            gridViewLocation = Vector2Int.one;
+            UpdateGlobalPosition();
+            FindGridWindow(globalPosition);
+            ControllerUIOnMove(Vector2Int.zero, globalPosition);
+        }
+        public void ControllerUISelect(GridView gridView, ItemView itemView)
+        {
+            ResetAllCurrent();
+            currentGridView = gridView;
+            gridViewLocation = CalculateItemLocation(gridView, itemView) + Vector2Int.one;
+            UpdateGlobalPosition();
+            FindGridWindow(globalPosition);
+            ControllerUIOnMove(Vector2Int.zero, globalPosition);
+        }
+        public void ControllerUISelect(GridView gridView)
+        {
+            ResetAllCurrent();
+            currentGridView = gridView;
+            gridViewLocation = Vector2Int.one;
+            UpdateGlobalPosition();
+            FindGridWindow(globalPosition);
+            ControllerUIOnMove(Vector2Int.zero, globalPosition);
+        }
+        public void ControllerUISelect(ContextMenuButton contextMenuButton)
+        {
+            if ((currentContextMenuButton != null && currentContextMenuButton.gameObject.activeSelf))
             {
-                case EAmandsControllerCurrentUI.GridView:
-                    globalPosition.x = currentGridView.transform.position.x + (GridSize * gridViewLocation.x) - (GridSize / 2f);
-                    globalPosition.y = currentGridView.transform.position.y - (GridSize * gridViewLocation.y) + (GridSize / 2f);
-                    globalSize = new Vector2(GridSize, GridSize) / ScreenRatio;
-                    break;
-                case EAmandsControllerCurrentUI.TradingTableGridView:
-                    Vector2 size = currentTradingTableGridView.GetComponent<RectTransform>().sizeDelta * ScreenRatio;
-                    globalPosition.x = (currentTradingTableGridView.transform.position.x - (size.x / 2f)) + (GridSize * gridViewLocation.x) - (GridSize / 2f);
-                    globalPosition.y = (currentTradingTableGridView.transform.position.y + (size.y / 2f)) - (GridSize * gridViewLocation.y) + (GridSize / 2f);
-                    globalSize = new Vector2(GridSize, GridSize) / ScreenRatio;
-                    break;
-                case EAmandsControllerCurrentUI.ModSlotView:
-                    globalPosition = currentModSlotView.transform.position;
-                    globalSize = new Vector2(GridSize, GridSize) / ScreenRatio;
-                    break;
-                case EAmandsControllerCurrentUI.EquipmentSlotView:
-                    globalPosition = new Vector2(currentEquipmentSlotView.transform.position.x + (SlotSize / 2f), currentEquipmentSlotView.transform.position.y - (SlotSize / 2f));
-                    globalSize = new Vector2(SlotSize, SlotSize) / ScreenRatio;
-                    break;
-                case EAmandsControllerCurrentUI.WeaponsSlotView:
-                    globalPosition = new Vector2(currentWeaponsSlotView.transform.position.x + (157.0811f * ScreenRatio) - 2f, currentWeaponsSlotView.transform.position.y - (SlotSize / 2f));
-                    globalSize = new Vector2(157.0811f * ScreenRatio * 2f, SlotSize) / ScreenRatio;
-                    break;
-                case EAmandsControllerCurrentUI.ArmbandSlotView:
-                    globalPosition = new Vector2(currentArmbandSlotView.transform.position.x + (SlotSize / 2f), currentArmbandSlotView.transform.position.y - (32f * ScreenRatio));
-                    globalSize = new Vector2(SlotSize, 32f * ScreenRatio * 2f) / ScreenRatio;
-                    break;
-                case EAmandsControllerCurrentUI.ContainersSlotView:
-                    globalPosition = new Vector2(currentContainersSlotView.transform.position.x + (SlotSize / 2f), currentContainersSlotView.transform.position.y - (SlotSize / 2f));
-                    globalSize = new Vector2(SlotSize, SlotSize) / ScreenRatio;
-                    break;
-                case EAmandsControllerCurrentUI.DogtagSlotView:
-                    globalPosition = new Vector2(currentDogtagSlotView.transform.position.x - GridSize - (GridSize / 2f), currentDogtagSlotView.transform.position.y - (GridSize / 2f));
-                    globalSize = new Vector2(GridSize, GridSize) / ScreenRatio;
-                    break;
-                case EAmandsControllerCurrentUI.SpecialSlotSlotView:
-                    globalPosition.x = currentSpecialSlotSlotView.transform.position.x + (GridSize / 2f);
-                    globalPosition.y = currentSpecialSlotSlotView.transform.position.y - (GridSize / 2f);
-                    globalSize = new Vector2(GridSize, GridSize) / ScreenRatio;
-                    break;
-                case EAmandsControllerCurrentUI.SearchButton:
-                    globalPosition.x = currentSearchButton.transform.position.x;
-                    globalPosition.y = currentSearchButton.transform.position.y;
-                    globalSize = Vector2.zero;
-                    break;
-                case EAmandsControllerCurrentUI.ContextMenuButton:
-                    globalPosition.x = currentSimpleContextMenuButton.transform.position.x;
-                    globalPosition.y = currentSimpleContextMenuButton.transform.position.y;
-                    globalSize = Vector2.zero;
-                    break;
+                currentContextMenuButton.OnPointerExit(null);
             }
+            currentContextMenuButton = contextMenuButton;
+            currentContextMenuButton.OnPointerEnter(null);
+        }
+        public Vector2Int CalculateItemLocation(GridView gridView, ItemView itemView)
+        {
+            int GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
+            int GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+
+            RectTransform rectTransform = gridView.transform.GetComponent<RectTransform>();
+            Vector2 size = rectTransform.rect.size;
+            Vector2 pivot = rectTransform.pivot;
+            Vector2 b = size * pivot;
+            Vector2 vector = rectTransform.InverseTransformPoint((Vector2)itemView.transform.position + new Vector2(0f,-64f));
+            vector += b;
+
+            object gstruct23 = CalculateRotatedSize.Invoke(itemView.Item, new object[1] { itemView.ItemRotation });
+
+            vector /= 63f;
+            vector.y = (float)GridHeight - vector.y;
+
+            vector.y -= (float)Traverse.Create(gstruct23).Field("Y").GetValue<int>();
+
+            return new Vector2Int(Mathf.Clamp(Mathf.RoundToInt(vector.x), 0, GridWidth), Mathf.Clamp(Mathf.RoundToInt(vector.y), 0, GridHeight));
         }
         public void UpdateSelector()
         {
@@ -5075,7 +4423,7 @@ namespace AmandsController
                 if ((currentGridView != null && currentGridView.gameObject.activeSelf) && currentGridView.gameObject.activeSelf)
                 {
                     SelectedImage.sprite = LoadedSprites["Grid.png"];
-                    globalSize = new Vector2(GridSize, GridSize) / ScreenRatio;
+                    globalSize = new Vector2(GridSize, GridSize);// * ScreenRatio;
                     SelectedGameObject.SetActive(true);
                     SelectedRectTransform.SetParent(currentGridView.transform);
                     SelectedRectTransform.sizeDelta = globalSize;
@@ -5085,7 +4433,7 @@ namespace AmandsController
                 else if ((currentTradingTableGridView != null && currentTradingTableGridView.gameObject.activeSelf))
                 {
                     SelectedImage.sprite = LoadedSprites["Grid.png"];
-                    globalSize = new Vector2(GridSize, GridSize) / ScreenRatio;
+                    globalSize = new Vector2(GridSize, GridSize);// * ScreenRatio;
                     SelectedGameObject.SetActive(true);
                     SelectedRectTransform.SetParent(tradingTableGridView.transform);
                     SelectedRectTransform.sizeDelta = globalSize;
@@ -5095,7 +4443,7 @@ namespace AmandsController
                 else if ((currentModSlotView != null && currentModSlotView.gameObject.activeSelf))
                 {
                     SelectedImage.sprite = LoadedSprites["Grid.png"];
-                    globalSize = new Vector2(GridSize, GridSize) / ScreenRatio;
+                    globalSize = new Vector2(GridSize, GridSize);// * ScreenRatio;
                     SelectedGameObject.SetActive(true);
                     SelectedRectTransform.SetParent(currentModSlotView.transform);
                     SelectedRectTransform.sizeDelta = globalSize;
@@ -5105,7 +4453,7 @@ namespace AmandsController
                 else if ((currentEquipmentSlotView != null && currentEquipmentSlotView.gameObject.activeSelf))
                 {
                     SelectedImage.sprite = LoadedSprites["Slot.png"];
-                    globalSize = new Vector2(SlotSize, SlotSize) / ScreenRatio;
+                    globalSize = new Vector2(SlotSize, SlotSize);// * ScreenRatio;
                     SelectedGameObject.SetActive(true);
                     RectTransform slotPlace = Traverse.Create(currentEquipmentSlotView).Field("_slotPlace").GetValue<RectTransform>();
                     SelectedRectTransform.SetParent(slotPlace);
@@ -5116,7 +4464,7 @@ namespace AmandsController
                 else if ((currentWeaponsSlotView != null && currentWeaponsSlotView.gameObject.activeSelf))
                 {
                     SelectedImage.sprite = LoadedSprites["WeaponSlot.png"];
-                    globalSize = new Vector2(157.0811f * ScreenRatio * 2f, SlotSize) / ScreenRatio;
+                    globalSize = new Vector2(157.0811f * ScreenRatio * 2f, SlotSize);// * ScreenRatio;
                     SelectedGameObject.SetActive(true);
                     SelectedRectTransform.SetParent(currentWeaponsSlotView.transform);
                     SelectedRectTransform.sizeDelta = globalSize;
@@ -5126,7 +4474,7 @@ namespace AmandsController
                 else if ((currentArmbandSlotView != null && currentArmbandSlotView.gameObject.activeSelf))
                 {
                     SelectedImage.sprite = LoadedSprites["ArmbandSlot.png"];
-                    globalSize = new Vector2(SlotSize, 32f * ScreenRatio * 2f) / ScreenRatio;
+                    globalSize = new Vector2(SlotSize, 32f * ScreenRatio * 2f);// * ScreenRatio;
                     SelectedGameObject.SetActive(true);
                     SelectedRectTransform.SetParent(currentArmbandSlotView.transform);
                     SelectedRectTransform.sizeDelta = globalSize;
@@ -5136,7 +4484,7 @@ namespace AmandsController
                 else if ((currentContainersSlotView != null && currentContainersSlotView.gameObject.activeSelf))
                 {
                     SelectedImage.sprite = LoadedSprites["Slot.png"];
-                    globalSize = new Vector2(SlotSize, SlotSize) / ScreenRatio;
+                    globalSize = new Vector2(SlotSize, SlotSize);// * ScreenRatio;
                     SelectedGameObject.SetActive(true);
                     RectTransform slotPlace = Traverse.Create(currentContainersSlotView).Field("_slotPlace").GetValue<RectTransform>();
                     SelectedRectTransform.SetParent(slotPlace);
@@ -5147,7 +4495,7 @@ namespace AmandsController
                 else if ((currentDogtagSlotView != null && currentDogtagSlotView.gameObject.activeSelf))
                 {
                     SelectedImage.sprite = LoadedSprites["Grid.png"];
-                    globalSize = new Vector2(GridSize, GridSize) / ScreenRatio;
+                    globalSize = new Vector2(GridSize, GridSize);// * ScreenRatio;
                     SelectedGameObject.SetActive(true);
                     SelectedRectTransform.SetParent(currentDogtagSlotView.transform);
                     SelectedRectTransform.sizeDelta = globalSize;
@@ -5157,118 +4505,29 @@ namespace AmandsController
                 else if ((currentSpecialSlotSlotView != null && currentSpecialSlotSlotView.gameObject.activeSelf))
                 {
                     SelectedImage.sprite = LoadedSprites["Grid.png"];
-                    globalSize = new Vector2(GridSize, GridSize) / ScreenRatio;
+                    globalSize = new Vector2(GridSize, GridSize);// * ScreenRatio;
                     SelectedGameObject.SetActive(true);
                     SelectedRectTransform.SetParent(currentSpecialSlotSlotView.transform);
                     SelectedRectTransform.sizeDelta = globalSize;
                     SelectedRectTransform.localPosition = Vector2.zero;
                     SelectedRectTransform.position = globalPosition;
                 }
-
-                /*if (currentContainedGridsView != null)
-                {
-                    SelectedGameObject.SetActive(true);
-                    SelectedRectTransform.SetParent(currentContainedGridsView.transform);
-                    SelectedRectTransform.sizeDelta = globalSize;
-                    SelectedRectTransform.localPosition = Vector2.zero;
-                    SelectedRectTransform.position = globalPosition;
-                }
-                else if (currentScrollRectNoDrag != null)
-                {
-                    SelectedGameObject.SetActive(true);
-                    SelectedRectTransform.SetParent(currentScrollRectNoDrag.content);
-                    SelectedRectTransform.sizeDelta = globalSize;
-                    SelectedRectTransform.localPosition = Vector2.zero;
-                    SelectedRectTransform.position = globalPosition;
-                }
-                else if (inventoryScreen != null)
-                {
-                    SelectedGameObject.SetActive(true);
-                    SelectedRectTransform.SetParent(inventoryScreen.transform);
-                    SelectedRectTransform.sizeDelta = globalSize;
-                    SelectedRectTransform.localPosition = Vector2.zero;
-                    SelectedRectTransform.position = globalPosition;
-                }*/
             }
         }
-        public void ControllerUISelect()
+        public InventoryScreen.EInventoryTab CurrentTab()
         {
-            ResetAllCurrent();
-            gridViewLocation = Vector2Int.one;
-            UpdateGlobalPosition();
-            FindGridWindow(globalPosition);
-            ControllerUIOnMove(Vector2Int.zero, globalPosition);
-        }
-        public void ControllerUISelect(GridView gridView, ItemView itemView)
-        {
-            ResetAllCurrent();
-            currentGridView = gridView;
-            gridViewLocation = AmandsControllerCalculateItemLocation(gridView, itemView) + Vector2Int.one;
-            UpdateGlobalPosition();
-            FindGridWindow(globalPosition);
-            ControllerUIOnMove(Vector2Int.zero, globalPosition);
-        }
-        public void ControllerUISelect(GridView gridView)
-        {
-            ResetAllCurrent();
-            currentGridView = gridView;
-            gridViewLocation = Vector2Int.one;
-            UpdateGlobalPosition();
-            FindGridWindow(globalPosition);
-            ControllerUIOnMove(Vector2Int.zero, globalPosition);
-        }
-        public void ControllerUISelect(SimpleContextMenuButton simpleContextMenuButton)
-        {
-            if ((currentSimpleContextMenuButton != null && currentSimpleContextMenuButton.gameObject.activeSelf))
+            if (Tabs != null)
             {
-                currentSimpleContextMenuButton.OnPointerExit(null);
-            }
-            currentSimpleContextMenuButton = simpleContextMenuButton;
-            UpdateGlobalPosition();
-            currentSimpleContextMenuButton.OnPointerEnter(null);
-        }
-        //public LocationInGrid AmandsControllerCalculateItemLocation(GridView gridView, ItemView itemView)
-        public Vector2Int AmandsControllerCalculateItemLocation(GridView gridView, ItemView itemView)
-        {
-            int GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
-            int GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
-
-            RectTransform rectTransform = gridView.transform.GetComponent<RectTransform>();
-            Vector2 size = rectTransform.rect.size;
-            Vector2 pivot = rectTransform.pivot;
-            Vector2 b = size * pivot;
-            Vector2 vector = rectTransform.InverseTransformPoint((Vector2)itemView.transform.position + new Vector2(0f,-64f));
-            vector += b;
-
-            //GStruct23 gstruct = itemView.Item.CalculateRotatedSize(itemView.ItemRotation);
-            object gstruct23 = CalculateRotatedSize.Invoke(itemView.Item, new object[1] { itemView.ItemRotation });
-
-            vector /= 63f;
-            vector.y = (float)GridHeight - vector.y;
-
-            //vector.y -= (float)gstruct.Y;
-            vector.y -= (float)Traverse.Create(gstruct23).Field("Y").GetValue<int>();
-
-            //return new LocationInGrid(Mathf.Clamp(Mathf.RoundToInt(vector.x), 0, GridWidth), Mathf.Clamp(Mathf.RoundToInt(vector.y), 0, GridHeight), itemView.ItemRotation);
-            return new Vector2Int(Mathf.Clamp(Mathf.RoundToInt(vector.x), 0, GridWidth), Mathf.Clamp(Mathf.RoundToInt(vector.y), 0, GridHeight));
-        }
-        public void AmandsControllerSearch()
-        {
-            if (Interface && (currentSearchButton != null && currentSearchButton.gameObject.activeSelf))
-            {
-                Press.Invoke(currentSearchButton, null);
-            }
-            else
-            {
-                AmandsControllerDisableSet("SearchButton");
-                if (SearchButtonImage != null)
+                foreach (KeyValuePair<InventoryScreen.EInventoryTab, Tab> Tab in Tabs)
                 {
-                    SearchButtonImage.color = Color.white;
-                    SearchButtonImage = null;
+                    if (Traverse.Create(Tab.Value).Field("_uiSelected").GetValue<bool>()) return Tab.Key;
                 }
             }
+            return InventoryScreen.EInventoryTab.Unchanged;
         }
-        public void AmandsControllerOnPointerMove()
+
+        // UI Pointer
+        public void ControllerOnPointerMove()
         {
             if (pointerEventData != null)
             {
@@ -5282,18 +4541,21 @@ namespace AmandsController
                 if (results.Count > 0)
                 {
                     pointerEventData.pointerEnter = results[0].gameObject;
-                    onPointerEnterItemView = results[0].gameObject.GetComponentInParent<ItemView>();
-                    if (onPointerEnterItemView == null)
+                    if (results[0].gameObject.GetComponentInParent<QuickSlotItemView>() == null)
                     {
-                        onPointerEnterItemView = results[0].gameObject.GetComponentInParent<GridItemView>();
-                    }
-                    if (onPointerEnterItemView == null)
-                    {
-                        onPointerEnterItemView = results[0].gameObject.GetComponentInParent<SlotItemView>();
-                    }
-                    if (onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf)
-                    {
-                        onPointerEnterItemView.OnPointerEnter(pointerEventData);
+                        onPointerEnterItemView = results[0].gameObject.GetComponentInParent<ItemView>();
+                        if (onPointerEnterItemView == null)
+                        {
+                            onPointerEnterItemView = results[0].gameObject.GetComponentInParent<GridItemView>();
+                        }
+                        if (onPointerEnterItemView == null)
+                        {
+                            onPointerEnterItemView = results[0].gameObject.GetComponentInParent<SlotItemView>();
+                        }
+                        if (onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf)
+                        {
+                            onPointerEnterItemView.OnPointerEnter(pointerEventData);
+                        }
                     }
                 }
                 else
@@ -5301,19 +4563,21 @@ namespace AmandsController
                     pointerEventData.pointerEnter = null;
                     onPointerEnterItemView = null;
                 }
-                UpdateAmandsControllerBlocks();
+                UpdateControllerBlocks();
             }
         }
-        public void AmandsControllerUse(bool Hold)
+
+        // UI Inputs
+        private void ControllerUse(bool Hold)
         {
             if (onPointerEnterItemView == null || (onPointerEnterItemView != null && !onPointerEnterItemView.gameObject.activeSelf))
             {
-                AmandsControllerOnPointerMove();
+                ControllerOnPointerMove();
             }
             if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf)
             {
                 pointerEventData.position = globalPosition;
-                ItemUiContext ItemUiContext = ItemUiContext.Instance;//Traverse.Create(onPointerEnterItemView).Field("ItemUiContext").GetValue<ItemUiContext>();
+                ItemUiContext ItemUiContext = ItemUiContext.Instance;
                 object NewContextInteractionsObject = Traverse.Create(onPointerEnterItemView).Property("NewContextInteractions").GetValue();
                 if (NewContextInteractionsObject != null)
                 {
@@ -5346,8 +4610,6 @@ namespace AmandsController
                         ExecuteInteractionInvokeParameters[0] = EItemInfoButton.Open;
                         if ((bool)ExecuteInteraction.Invoke(NewContextInteractionsObject, ExecuteInteractionInvokeParameters)) return;
                     }
-                    //ExecuteInteractionInvokeParameters[0] = onPointerEnterItemView.Item.IsContainer ? EItemInfoButton.Open : EItemInfoButton.Inspect;
-                    //if (onPointerEnterItemView.Item.IsContainer && (bool)ExecuteInteraction.Invoke(NewContextInteractionsObject, ExecuteInteractionInvokeParameters)) return;
                     if (Hold && ExecuteMiddleClick != null && (bool)ExecuteMiddleClick.Invoke(onPointerEnterItemView, null)) return;
                     SimpleTooltip tooltip = ItemUiContext.Tooltip;
                     IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Equip;
@@ -5358,7 +4620,7 @@ namespace AmandsController
                         {
                             tooltip.Close();
                         }
-                        AmandsControllerOnPointerMove();
+                        ControllerOnPointerMove();
                         return;
                     }
                     else
@@ -5377,7 +4639,547 @@ namespace AmandsController
                 }
             }
         }
-        public string AmandsControllerUseAction(bool Hold)
+        private void ControllerQuickMove()
+        {
+            if (onPointerEnterItemView == null || (onPointerEnterItemView != null && !onPointerEnterItemView.gameObject.activeSelf))
+            {
+                ControllerOnPointerMove();
+            }
+            if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf)
+            {
+                pointerEventData.position = globalPosition;
+                ItemUiContext ItemUiContext = ItemUiContext.Instance;
+                if (ItemUiContext == null || !onPointerEnterItemView.IsSearched) return;
+                TraderControllerClass ItemController = Traverse.Create(onPointerEnterItemView).Field("ItemController").GetValue<TraderControllerClass>();
+                SimpleTooltip tooltip = ItemUiContext.Tooltip;
+                object ItemContext = Traverse.Create(onPointerEnterItemView).Property("ItemContext").GetValue<object>();
+                if (ItemContext != null)
+                {
+                    object gstructObject = QuickFindAppropriatePlace.Invoke(ItemUiContext, new object[5] { ItemContext, ItemController, false, true, true });
+                    if (gstructObject != null)
+                    {
+                        bool Failed = Traverse.Create(gstructObject).Property("Failed").GetValue<bool>();
+                        if (Failed) return;
+                        object Value = Traverse.Create(gstructObject).Field("Value").GetValue<object>();
+                        if (Value != null)
+                        {
+                            if (!(bool)CanExecute.Invoke(ItemController, new object[1] { Value }))
+                            {
+                                return;
+                            }
+                            bool ItemsDestroyRequired = Traverse.Create(Value).Field("ItemsDestroyRequired").GetValue<bool>();
+                            if (ItemsDestroyRequired)
+                            {
+                                NotificationManagerClass.DisplayWarningNotification("DiscardLimit", ENotificationDurationType.Default);
+                                return;
+                            }
+                            string itemSound = onPointerEnterItemView.Item.ItemSound;
+                            RunNetworkTransaction.Invoke(ItemController, new object[2] { Value, null });
+                            if (tooltip != null)
+                            {
+                                tooltip.Close();
+                            }
+                            Singleton<GUISounds>.Instance.PlayItemSound(itemSound, EInventorySoundType.pickup, false);
+                            ControllerOnPointerMove();
+                        }
+                    }
+                }
+            }
+        }
+        private void ControllerDiscard()
+        {
+            if (onPointerEnterItemView == null || (onPointerEnterItemView != null && !onPointerEnterItemView.gameObject.activeSelf))
+            {
+                ControllerOnPointerMove();
+            }
+            if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf)
+            {
+                pointerEventData.position = globalPosition;
+                ItemUiContext ItemUiContext = ItemUiContext.Instance;
+                if (ItemUiContext == null || !onPointerEnterItemView.IsSearched) return;
+                object NewContextInteractionsObject = Traverse.Create(onPointerEnterItemView).Property("NewContextInteractions").GetValue();
+                if (NewContextInteractionsObject != null)
+                {
+                    if (IsInteractionAvailable == null)
+                    {
+                        IsInteractionAvailable = NewContextInteractionsObject.GetType().GetMethod("IsInteractionAvailable", BindingFlags.Instance | BindingFlags.Public);
+                    }
+                }
+                if (IsInteractionAvailable != null)
+                {
+                    SimpleTooltip tooltip = ItemUiContext.Tooltip;
+                    IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Discard;
+                    if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters))
+                    {
+                        ItemUiContext.ThrowItem(onPointerEnterItemView.Item).HandleExceptions();
+                        if (tooltip != null)
+                        {
+                            tooltip.Close();
+                        }
+                        ControllerOnPointerMove();
+                        return;
+                    }
+                }
+            }
+        }
+
+        private void ControllerBeginDrag()
+        {
+            if (onPointerEnterItemView == null || (onPointerEnterItemView != null && !onPointerEnterItemView.gameObject.activeSelf))
+            {
+                ControllerOnPointerMove();
+            }
+            if (!Dragging && pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf)
+            {
+                TraderControllerClass ItemController = Traverse.Create(onPointerEnterItemView).Field("ItemController").GetValue<TraderControllerClass>();
+                if (ItemController != null)
+                {
+                    bool IsBeingLoadedMagazine = Traverse.Create(Traverse.Create(onPointerEnterItemView).Property("IsBeingLoadedMagazine").GetValue<object>()).Field("gparam_0").GetValue<bool>();
+                    bool IsBeingUnloadedMagazine = Traverse.Create(Traverse.Create(onPointerEnterItemView).Property("IsBeingUnloadedMagazine").GetValue<object>()).Field("gparam_0").GetValue<bool>();
+                    if (IsBeingLoadedMagazine || IsBeingUnloadedMagazine)
+                    {
+                        ItemController.StopProcesses();
+                        return;
+                    }
+                }
+                ControllerUIMoveSnapshot();
+                pointerEventData.position = globalPosition;
+                pointerEventData.dragging = false;
+                DraggingItemView = onPointerEnterItemView;
+                DraggingItemView.OnBeginDrag(pointerEventData);
+                pointerEventData.dragging = true;
+                Dragging = true;
+                EnableSet("OnDrag");
+                ControllerOnPointerMove();
+                ControllerOnDrag();
+            }
+        }
+        private void ControllerOnDrag()
+        {
+            if (Dragging && pointerEventData != null)
+            {
+                pointerEventData.position = globalPosition;
+                if (DraggingItemView != null && DraggingItemView.gameObject.activeSelf && DraggingItemView.BeingDragged)
+                {
+                    DraggingItemView.OnDrag(pointerEventData);
+                }
+                else if ((DraggingItemView != null && !DraggingItemView.BeingDragged) || !DraggingItemView.gameObject.activeSelf)
+                {
+                    ControllerCancelDrag();
+                }
+            }
+        }
+        private void ControllerEndDrag()
+        {
+            if (Dragging && pointerEventData != null)
+            {
+                pointerEventData.position = globalPosition;
+                if (pointerEventData.pointerEnter != null)
+                {
+                    Dragging = false;
+                    pointerEventData.dragging = false;
+                    if (DraggingItemView != null && DraggingItemView.gameObject.activeSelf)
+                    {
+                        DraggingItemView.OnEndDrag(pointerEventData);
+                        DraggingItemView = null;
+                        ControllerOnPointerMove();
+                    }
+                    DisableSet("OnDrag");
+                }
+                else
+                {
+                    ControllerCancelDrag();
+                }
+            }
+        }
+        public void ControllerCancelDrag()
+        {
+            if (Dragging)
+            {
+                Dragging = false;
+                PointerEventData pointerEventData = new PointerEventData(eventSystem);
+                pointerEventData.button = PointerEventData.InputButton.Left;
+                pointerEventData.position = globalPosition;
+                pointerEventData.pointerEnter = null;
+                pointerEventData.dragging = false;
+                if (DraggingItemView != null && DraggingItemView.gameObject.activeSelf)
+                {
+                    DraggingItemView.OnEndDrag(pointerEventData);
+                    DraggingItemView = null;
+                    ControllerUIMoveToSnapshot();
+                }
+                DisableSet("OnDrag");
+            }
+        }
+        private void ControllerRotateDragged()
+        {
+            if (Dragging && DraggingItemView != null && DraggingItemView.gameObject.activeSelf)
+            {
+                DraggedItemView DraggedItemView = Traverse.Create(DraggingItemView).Property("DraggedItemView").GetValue<DraggedItemView>();
+                if (DraggedItemView != null)
+                {
+                    object ItemContext = Traverse.Create(DraggedItemView).Property("ItemContext").GetValue<object>();
+                    if (ItemContext != null)
+                    {
+                        ItemRotation ItemRotation = Traverse.Create(ItemContext).Field("ItemRotation").GetValue<ItemRotation>();
+                        DraggedItemViewMethod_2.Invoke(DraggedItemView, new object[1] { (ItemRotation == ItemRotation.Horizontal ? ItemRotation.Vertical : ItemRotation.Horizontal) });
+                        ControllerOnDrag();
+                    }
+                }
+            }
+        }
+        private void ControllerSplitDragged()
+        {
+            if (Dragging && pointerEventData != null)
+            {
+                AmandsControllerPlugin.LeftControl.Enable();
+                pointerEventData.position = globalPosition;
+                if (pointerEventData.pointerEnter != null)
+                {
+                    Dragging = false;
+                    pointerEventData.dragging = false;
+                    if (DraggingItemView != null && DraggingItemView.gameObject.activeSelf)
+                    {
+                        DraggingItemView.OnEndDrag(pointerEventData);
+                        DraggingItemView = null;
+                        ControllerOnPointerMove();
+                    }
+                    DisableSet("OnDrag");
+                }
+                else
+                {
+                    ControllerCancelDrag();
+                }
+                AmandsControllerPlugin.LeftControl.Disable();
+            }
+        }
+
+        private void ControllerSearch()
+        {
+            if (Interface && (currentSearchButton != null && currentSearchButton.gameObject.activeSelf))
+            {
+                ButtonPress.Invoke(currentSearchButton, null);
+            }
+            else
+            {
+                DisableSet("SearchButton");
+                if (SearchButtonImage != null)
+                {
+                    SearchButtonImage.color = Color.white;
+                    SearchButtonImage = null;
+                }
+            }
+        }
+        private void ControllerShowContextMenu()
+        {
+            if (!ContextMenu && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf)
+            {
+                UpdateGlobalPosition();
+                ShowContextMenuInvokeParameters[0] = globalPosition;
+                ShowContextMenu.Invoke(onPointerEnterItemView, ShowContextMenuInvokeParameters);
+            }
+        }
+        private void ControllerContextMenuUse()
+        {
+            if ((currentContextMenuButton != null && currentContextMenuButton.gameObject.activeSelf))
+            {
+                Button _button = Traverse.Create(currentContextMenuButton).Field("_button").GetValue<Button>();
+                if (_button != null)
+                {
+                    _button.onClick.Invoke();
+                }
+            }
+        }
+        private void ControllerInterfaceBind(EBoundItem bindIndex)
+        {
+            if (onPointerEnterItemView == null || (onPointerEnterItemView != null && !onPointerEnterItemView.gameObject.activeSelf))
+            {
+                ControllerOnPointerMove();
+            }
+            if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf)
+            {
+                pointerEventData.position = globalPosition;
+                ItemUiContext ItemUiContext = ItemUiContext.Instance;
+                if (ItemUiContext != null && onPointerEnterItemView.Item != null && ItemUIContextMethod_0 != null)
+                {
+                    ItemUIContextMethod_0InvokeParameters[0] = onPointerEnterItemView.Item;
+                    ItemUIContextMethod_0InvokeParameters[1] = bindIndex;
+                    ItemUIContextMethod_0.Invoke(ItemUiContext, ItemUIContextMethod_0InvokeParameters);
+                }
+            }
+        }
+        private void ControllerSplitDialogAccept()
+        {
+            if (splitDialog != null)
+            {
+                splitDialog.Accept();
+            }
+        }
+        private void ControllerSplitDialogAdd(int Value)
+        {
+            if (splitDialog != null)
+            {
+                IntSlider _intSlider = Traverse.Create(splitDialog).Field("_intSlider").GetValue<IntSlider>();
+                if (_intSlider != null && _intSlider.gameObject.activeSelf)
+                {
+                    lastIntSliderValue = Value;
+                    SplitDialogAutoMove = true;
+                    int int_1 = Traverse.Create(_intSlider).Field("int_1").GetValue<int>() - 1;
+                    _intSlider.UpdateValue((_intSlider.CurrentValue() + int_1) + ((LB || RB) ? Value * 10 : Value));
+                }
+                StepSlider _stepSlider = Traverse.Create(splitDialog).Field("_stepSlider").GetValue<StepSlider>();
+                if (_stepSlider != null && _stepSlider.gameObject.activeSelf)
+                {
+                    lastIntSliderValue = Value;
+                    SplitDialogAutoMove = true;
+                    //Temp
+                    int int_0 = Traverse.Create(_stepSlider).Field("int_0").GetValue<int>();
+                    int int_1 = Traverse.Create(_stepSlider).Field("int_1").GetValue<int>();
+                    _stepSlider.Show(int_0, int_1, (int)_stepSlider.CurrentValue() + ((LB || RB) ? Value * 10 : Value));
+                }
+            }
+        }
+        private void ControllerScroll(float Value)
+        {
+            float height = currentScrollRectNoDrag.content.rect.height * ScreenRatio;
+            Vector2 position = new Vector2(currentScrollRectNoDragRectTransform.position.x + (currentScrollRectNoDragRectTransform.rect.x * ScreenRatio), currentScrollRectNoDragRectTransform.position.y - ((currentScrollRectNoDragRectTransform.rect.height * (currentScrollRectNoDragRectTransform.pivot.y - 1f)) * ScreenRatio));
+            currentScrollRectNoDrag.verticalNormalizedPosition = currentScrollRectNoDrag.verticalNormalizedPosition + ((((Value * 1000f) / height) / height) * 10000f * Time.deltaTime * AmandsControllerPlugin.ScrollSensitivity.Value);
+            UpdateGlobalPosition();
+            if ((globalPosition.y + (GridSize / 2f)) > position.y)
+            {
+                ControllerUIMove(new Vector2Int(0, -1), false);
+            }
+            else if ((globalPosition.y - (GridSize / 2f)) < (position.y - (currentScrollRectNoDragRectTransform.rect.height * ScreenRatio)))
+            {
+                ControllerUIMove(new Vector2Int(0, 1), false);
+            }
+        }
+        private void ControllerAutoScroll()
+        {
+            float height = currentScrollRectNoDrag.content.rect.height;
+            Vector2 position = new Vector2(currentScrollRectNoDragRectTransform.position.x + (currentScrollRectNoDragRectTransform.rect.x * ScreenRatio), currentScrollRectNoDragRectTransform.position.y - ((currentScrollRectNoDragRectTransform.rect.height * (currentScrollRectNoDragRectTransform.pivot.y - 1f)) * ScreenRatio));
+            if (globalPosition.x > position.x && globalPosition.x < (position.x + (currentScrollRectNoDragRectTransform.rect.width * ScreenRatio)))
+            {
+                if ((globalPosition.y + (GridSize / 2f)) > position.y)
+                {
+                    currentScrollRectNoDrag.verticalNormalizedPosition = currentScrollRectNoDrag.verticalNormalizedPosition + (((1000f / height) / height) * 10000f * Time.deltaTime * AmandsControllerPlugin.ScrollSensitivity.Value);
+                    UpdateGlobalPosition();
+                    if (!((globalPosition.y + (GridSize / 2f)) > position.y) && !((globalPosition.y - (GridSize / 2f)) < (position.y - (currentScrollRectNoDragRectTransform.rect.height * ScreenRatio))))
+                    {
+                        ControllerUIOnMove(Vector2Int.zero, globalPosition);
+                    }
+                }
+                else if ((globalPosition.y - (GridSize / 2f)) < (position.y - (currentScrollRectNoDragRectTransform.rect.height * ScreenRatio)))
+                {
+                    currentScrollRectNoDrag.verticalNormalizedPosition = currentScrollRectNoDrag.verticalNormalizedPosition + (((-1000f / height) / height) * 10000f * Time.deltaTime * AmandsControllerPlugin.ScrollSensitivity.Value);
+                    UpdateGlobalPosition();
+                    if (!((globalPosition.y + (GridSize / 2f)) > position.y) && !((globalPosition.y - (GridSize / 2f)) < (position.y - (currentScrollRectNoDragRectTransform.rect.height * ScreenRatio))))
+                    {
+                        ControllerUIOnMove(Vector2Int.zero, globalPosition);
+                    }
+                }
+            }
+        }
+        private void ControllerNextTab()
+        {
+            Tab tab = null;
+            switch (CurrentTab())
+            {
+                case InventoryScreen.EInventoryTab.Overall:
+                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Gear)) tab = Tabs[InventoryScreen.EInventoryTab.Gear];
+                    break;
+                case InventoryScreen.EInventoryTab.Gear:
+                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Health)) tab = Tabs[InventoryScreen.EInventoryTab.Health];
+                    break;
+                case InventoryScreen.EInventoryTab.Health:
+                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Skills)) tab = Tabs[InventoryScreen.EInventoryTab.Skills];
+                    break;
+                case InventoryScreen.EInventoryTab.Skills:
+                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Map)) tab = Tabs[InventoryScreen.EInventoryTab.Map];
+                    break;
+                case InventoryScreen.EInventoryTab.Map:
+                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Notes)) tab = Tabs[InventoryScreen.EInventoryTab.Notes];
+                    break;
+                case InventoryScreen.EInventoryTab.Notes:
+                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Overall)) tab = Tabs[InventoryScreen.EInventoryTab.Overall];
+                    break;
+            }
+            if (tab != null)
+            {
+                tab.OnPointerClick(null);
+            }
+        }
+        private void ControllerPreviousTab()
+        {
+            Tab tab = null;
+            switch (CurrentTab())
+            {
+                case InventoryScreen.EInventoryTab.Overall:
+                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Notes)) tab = Tabs[InventoryScreen.EInventoryTab.Notes];
+                    break;
+                case InventoryScreen.EInventoryTab.Gear:
+                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Overall)) tab = Tabs[InventoryScreen.EInventoryTab.Overall];
+                    break;
+                case InventoryScreen.EInventoryTab.Health:
+                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Gear)) tab = Tabs[InventoryScreen.EInventoryTab.Gear];
+                    break;
+                case InventoryScreen.EInventoryTab.Skills:
+                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Health)) tab = Tabs[InventoryScreen.EInventoryTab.Health];
+                    break;
+                case InventoryScreen.EInventoryTab.Map:
+                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Skills)) tab = Tabs[InventoryScreen.EInventoryTab.Skills];
+                    break;
+                case InventoryScreen.EInventoryTab.Notes:
+                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Map)) tab = Tabs[InventoryScreen.EInventoryTab.Map];
+                    break;
+            }
+            if (tab != null)
+            {
+                tab.OnPointerClick(null);
+            }
+        }
+
+        // UI Inputs Actions
+        public List<string> ControllerGetButtonAction(AmandsControllerButtonBind Bind)
+        {
+            List<string> Actions = new List<string>();
+            foreach (AmandsControllerCommand AmandsControllerCommand in Bind.AmandsControllerCommands)
+            {
+                if (AmandsControllerCommand.Command == EAmandsControllerCommand.None) continue;
+                switch (AmandsControllerCommand.Command)
+                {
+                    case EAmandsControllerCommand.ToggleSet:
+                        if (ActiveAmandsControllerSets.Contains(AmandsControllerCommand.AmandsControllerSet))
+                        {
+                            Actions.Add("Enable " + AmandsControllerCommand.AmandsControllerSet);
+                        }
+                        else if (AmandsControllerSets.ContainsKey(AmandsControllerCommand.AmandsControllerSet))
+                        {
+                            Actions.Add("Disable " + AmandsControllerCommand.AmandsControllerSet);
+                        }
+                        break;
+                    case EAmandsControllerCommand.EnableSet:
+                        if (AmandsControllerSets.ContainsKey(AmandsControllerCommand.AmandsControllerSet) && !ActiveAmandsControllerSets.Contains(AmandsControllerCommand.AmandsControllerSet))
+                        {
+                            Actions.Add("Enable " + AmandsControllerCommand.AmandsControllerSet);
+                        }
+                        break;
+                    case EAmandsControllerCommand.DisableSet:
+                        Actions.Add("Disable " + AmandsControllerCommand.AmandsControllerSet);
+                        break;
+                    case EAmandsControllerCommand.InputTree:
+                        Actions.Add("" + AmandsControllerCommand.InputTree);
+                        break;
+                    case EAmandsControllerCommand.QuickSelectWeapon:
+                        Actions.Add("QuickSelectWeapon");
+                        break;
+                    case EAmandsControllerCommand.SlowLeanLeft:
+                        Actions.Add("SlowLeanLeft");
+                        break;
+                    case EAmandsControllerCommand.SlowLeanRight:
+                        Actions.Add("SlowLeanRight");
+                        break;
+                    case EAmandsControllerCommand.EndSlowLean:
+                        Actions.Add("EndSlowLean");
+                        break;
+                    case EAmandsControllerCommand.RestoreLean:
+                        Actions.Add("RestoreLean");
+                        break;
+                    case EAmandsControllerCommand.InterfaceUp:
+                        Actions.Add("InterfaceUp");
+                        break;
+                    case EAmandsControllerCommand.InterfaceDown:
+                        Actions.Add("InterfaceDown");
+                        break;
+                    case EAmandsControllerCommand.InterfaceLeft:
+                        Actions.Add("InterfaceLeft");
+                        break;
+                    case EAmandsControllerCommand.InterfaceRight:
+                        Actions.Add("InterfaceRight");
+                        break;
+                    case EAmandsControllerCommand.InterfaceDisableAutoMove:
+                        Actions.Add("InterfaceDisableAutoMove");
+                        break;
+                    case EAmandsControllerCommand.BeginDrag:
+                        if (!Dragging && pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("Drag");
+                        break;
+                    case EAmandsControllerCommand.EndDrag:
+                        Actions.Add("EndDrag");
+                        break;
+                    case EAmandsControllerCommand.RotateDragged:
+                        Actions.Add("Rotate");
+                        break;
+                    case EAmandsControllerCommand.SplitDragged:
+                        Actions.Add("Split");
+                        break;
+                    case EAmandsControllerCommand.CancelDrag:
+                        Actions.Add("CancelDrag");
+                        break;
+                    case EAmandsControllerCommand.Search:
+                        Actions.Add("Search");
+                        break;
+                    case EAmandsControllerCommand.Use:
+                        Actions.Add(ControllerUseAction(false));
+                        break;
+                    case EAmandsControllerCommand.UseHold:
+                        Actions.Add(ControllerUseAction(true));
+                        break;
+                    case EAmandsControllerCommand.QuickMove:
+                        if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("QuickMove");
+                        break;
+                    case EAmandsControllerCommand.Discard:
+                        if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("Discard");
+                        break;
+                    case EAmandsControllerCommand.InterfaceBind4:
+                        if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("Bind4");
+                        break;
+                    case EAmandsControllerCommand.InterfaceBind5:
+                        if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("Bind5");
+                        break;
+                    case EAmandsControllerCommand.InterfaceBind6:
+                        if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("Bind6");
+                        break;
+                    case EAmandsControllerCommand.InterfaceBind7:
+                        if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("Bind7");
+                        break;
+                    case EAmandsControllerCommand.InterfaceBind8:
+                        if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("Bind8");
+                        break;
+                    case EAmandsControllerCommand.InterfaceBind9:
+                        if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("Bind9");
+                        break;
+                    case EAmandsControllerCommand.InterfaceBind10:
+                        if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("Bind10");
+                        break;
+                    case EAmandsControllerCommand.ShowContextMenu:
+                        if (!ContextMenu && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf) Actions.Add("ContextMenu");
+                        break;
+                    case EAmandsControllerCommand.ContextMenuUse:
+                        Actions.Add("Select");
+                        break;
+                    case EAmandsControllerCommand.SplitDialogAccept:
+                        Actions.Add("Accept");
+                        break;
+                    case EAmandsControllerCommand.SplitDialogAdd:
+                        Actions.Add("SplitDialogAdd");
+                        break;
+                    case EAmandsControllerCommand.SplitDialogSubtract:
+                        Actions.Add("SplitDialogSubtract");
+                        break;
+                    case EAmandsControllerCommand.SplitDialogDisableAutoMove:
+                        Actions.Add("SplitDialogDisableAutoMove");
+                        break;
+                    case EAmandsControllerCommand.PreviousTab:
+                        Actions.Add("PreviousTab");
+                        break;
+                    case EAmandsControllerCommand.NextTab:
+                        Actions.Add("NextTab");
+                        break;
+                }
+            }
+            return Actions;
+        }
+        public string ControllerUseAction(bool Hold)
         {
             if (onPointerEnterItemView == null || (onPointerEnterItemView != null && !onPointerEnterItemView.gameObject.activeSelf))
             {
@@ -5461,8 +5263,6 @@ namespace AmandsController
                 }
                 if (onPointerEnterItemView.Item != null && ExecuteInteraction != null && IsInteractionAvailable != null && Hold)
                 {
-                    IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Equip;
-                    if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "Equip";
                     IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Fold;
                     if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "Fold";
                     IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Unfold;
@@ -5471,433 +5271,67 @@ namespace AmandsController
                     if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "TurnOn";
                     IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.TurnOff;
                     if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "TurnOff";
+                    IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Equip;
+                    if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "Equip";
                 }
             }
             return "";
         }
-        public void AmandsControllerQuickMove()
+
+        // UI Blocks
+        public void ControllerButtonStateMethod(EAmandsControllerButton Button, bool Pressed)
         {
-            if (onPointerEnterItemView == null || (onPointerEnterItemView != null && !onPointerEnterItemView.gameObject.activeSelf))
-            {
-                AmandsControllerOnPointerMove();
-            }
-            if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf)
-            {
-                pointerEventData.position = globalPosition;
-                ItemUiContext ItemUiContext = ItemUiContext.Instance;//Traverse.Create(onPointerEnterItemView).Field("ItemUiContext").GetValue<ItemUiContext>();
-                if (ItemUiContext == null || !onPointerEnterItemView.IsSearched) return;
-                TraderControllerClass ItemController = Traverse.Create(onPointerEnterItemView).Field("ItemController").GetValue<TraderControllerClass>();
-                SimpleTooltip tooltip = ItemUiContext.Tooltip;
-                //GStruct374 gstruct = ItemUiContext.QuickFindAppropriatePlace(onPointerEnterItemView.ItemContext, ItemController, false, true, true);
-                object ItemContext = Traverse.Create(onPointerEnterItemView).Property("ItemContext").GetValue<object>();
-                if (ItemContext != null)
-                {
-                    object gstructObject = QuickFindAppropriatePlace.Invoke(ItemUiContext, new object[5] { ItemContext, ItemController, false, true, true });
-                    if (gstructObject != null)
-                    {
-                        bool Failed = Traverse.Create(gstructObject).Property("Failed").GetValue<bool>();
-                        if (Failed) return;
-                        object Value = Traverse.Create(gstructObject).Field("Value").GetValue<object>();
-                        if (Value != null)
-                        {
-                            if (!(bool)CanExecute.Invoke(ItemController, new object[1] { Value }))
-                            {
-                                return;
-                            }
-                            bool ItemsDestroyRequired = Traverse.Create(Value).Field("ItemsDestroyRequired").GetValue<bool>();
-                            if (ItemsDestroyRequired)
-                            {
-                                NotificationManagerClass.DisplayWarningNotification("DiscardLimit", ENotificationDurationType.Default);
-                                return;
-                            }
-                            string itemSound = onPointerEnterItemView.Item.ItemSound;
-                            RunNetworkTransaction.Invoke(ItemController, new object[2] { Value, null });
-                            if (tooltip != null)
-                            {
-                                tooltip.Close();
-                            }
-                            Singleton<GUISounds>.Instance.PlayItemSound(itemSound, EInventorySoundType.pickup, false);
-                            AmandsControllerOnPointerMove();
-                        }
-                    }
-                }
-            }
+            if (ButtonBlocks.ContainsKey(Button) && ButtonBlocks[Button] != null) ButtonBlocks[Button].UpdateButtonPressed(Pressed);
         }
-        public void AmandsControllerDiscard()
+        public void ControllerSetState(string AmandsControllerSet, bool Enabled)
         {
-            if (onPointerEnterItemView == null || (onPointerEnterItemView != null && !onPointerEnterItemView.gameObject.activeSelf))
-            {
-                AmandsControllerOnPointerMove();
-            }
-            if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf)
-            {
-                pointerEventData.position = globalPosition;
-                ItemUiContext ItemUiContext = ItemUiContext.Instance;//Traverse.Create(onPointerEnterItemView).Field("ItemUiContext").GetValue<ItemUiContext>();
-                if (ItemUiContext == null || !onPointerEnterItemView.IsSearched) return;
-                object NewContextInteractionsObject = Traverse.Create(onPointerEnterItemView).Property("NewContextInteractions").GetValue();
-                if (NewContextInteractionsObject != null)
-                {
-                    if (IsInteractionAvailable == null)
-                    {
-                        IsInteractionAvailable = NewContextInteractionsObject.GetType().GetMethod("IsInteractionAvailable", BindingFlags.Instance | BindingFlags.Public);
-                    }
-                }
-                if (IsInteractionAvailable != null)
-                {
-                    SimpleTooltip tooltip = ItemUiContext.Tooltip;
-                    IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Discard;
-                    if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters))
-                    {
-                        ItemUiContext.ThrowItem(onPointerEnterItemView.Item).HandleExceptions();
-                        if (tooltip != null)
-                        {
-                            tooltip.Close();
-                        }
-                        AmandsControllerOnPointerMove();
-                        return;
-                    }
-                }
-            }
+            UpdateControllerBlocks();
         }
-        public void AmandsControllerBeginDrag()
+        public void UpdateControllerBlocks()
         {
-            if (onPointerEnterItemView == null || (onPointerEnterItemView != null && !onPointerEnterItemView.gameObject.activeSelf))
+            foreach (KeyValuePair<EAmandsControllerButton, AmandsControllerButtonBlock> Block in ButtonBlocks)
             {
-                AmandsControllerOnPointerMove();
-            }
-            if (!Dragging && pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf)
-            {
-                TraderControllerClass ItemController = Traverse.Create(onPointerEnterItemView).Field("ItemController").GetValue<TraderControllerClass>();
-                if (ItemController != null)
+                if (Block.Value == null) continue;
+                bool PressValid = false;
+                bool HoldValid = false;
+                bool DoubleValid = false;
+                AmandsControllerButtonBind[] Binds = GetPriorityButtonBinds(Block.Key);
+                foreach (string Action in ControllerGetButtonAction(Binds[0]))
                 {
-                    bool IsBeingLoadedMagazine = Traverse.Create(Traverse.Create(onPointerEnterItemView).Property("IsBeingLoadedMagazine").GetValue<object>()).Field("gparam_0").GetValue<bool>();
-                    bool IsBeingUnloadedMagazine = Traverse.Create(Traverse.Create(onPointerEnterItemView).Property("IsBeingUnloadedMagazine").GetValue<object>()).Field("gparam_0").GetValue<bool>();
-                    if (IsBeingLoadedMagazine || IsBeingUnloadedMagazine)
-                    {
-                        ItemController.StopProcesses();
-                        return;
-                    }
+                    if (Action == "") continue;
+                    Block.Value.Press = Action;
+                    PressValid = true;
+                    break;
                 }
-                ControllerUIMoveSnapshot();
-                pointerEventData.position = globalPosition;
-                pointerEventData.dragging = false;
-                DraggingItemView = onPointerEnterItemView;
-                DraggingItemView.OnBeginDrag(pointerEventData);
-                pointerEventData.dragging = true;
-                Dragging = true;
-                AmandsControllerEnableSet("OnDrag");
-                AmandsControllerOnPointerMove();
-                AmandsControllerOnDrag();
-            }
-        }
-        public void AmandsControllerOnDrag()
-        {
-            if (Dragging && pointerEventData != null)
-            {
-                pointerEventData.position = globalPosition;
-                if (DraggingItemView != null && DraggingItemView.gameObject.activeSelf && DraggingItemView.BeingDragged)
+                foreach (string Action in ControllerGetButtonAction(Binds[2]))
                 {
-                    DraggingItemView.OnDrag(pointerEventData);
+                    if (Action == "") continue;
+                    Block.Value.Hold = Action;
+                    HoldValid = true;
+                    break;
                 }
-                else if ((DraggingItemView != null && !DraggingItemView.BeingDragged) || !DraggingItemView.gameObject.activeSelf)
+                foreach (string Action in ControllerGetButtonAction(Binds[3]))
                 {
-                    AmandsControllerCancelDrag();
+                    if (Action == "") continue;
+                    Block.Value.DoubleClick = Action;
+                    DoubleValid = true;
+                    break;
                 }
-            }
-        }
-        public void AmandsControllerEndDrag()
-        {
-            if (Dragging && pointerEventData != null)
-            {
-                pointerEventData.position = globalPosition;
-                if (pointerEventData.pointerEnter != null)
+                Block.Value.HoldGameObject.SetActive(HoldValid);
+                Block.Value.DoubleClickGameObject.SetActive(DoubleValid);
+                if (PressValid)
                 {
-                    Dragging = false;
-                    pointerEventData.dragging = false;
-                    if (DraggingItemView != null && DraggingItemView.gameObject.activeSelf)
-                    {
-                        DraggingItemView.OnEndDrag(pointerEventData);
-                        DraggingItemView = null;
-                        AmandsControllerOnPointerMove();
-                    }
-                    AmandsControllerDisableSet("OnDrag");
+                    Block.Value.gameObject.SetActive(true);
+                    Block.Value.UpdateCommands();
                 }
                 else
                 {
-                    AmandsControllerCancelDrag();
+                    Block.Value.gameObject.SetActive(false);
                 }
             }
-        }
-        public void AmandsControllerCancelDrag()
-        {
-            if (Dragging)
-            {
-                Dragging = false;
-                PointerEventData pointerEventData = new PointerEventData(eventSystem);
-                pointerEventData.button = PointerEventData.InputButton.Left;
-                pointerEventData.position = globalPosition;
-                pointerEventData.pointerEnter = null;
-                pointerEventData.dragging = false;
-                if (DraggingItemView != null && DraggingItemView.gameObject.activeSelf)
-                {
-                    DraggingItemView.OnEndDrag(pointerEventData);
-                    DraggingItemView = null;
-                    ControllerUIMoveToSnapshot();
-                }
-                AmandsControllerDisableSet("OnDrag");
-            }
-        }
-        public void AmandsControllerRotateDragged()
-        {
-            if (Dragging && DraggingItemView != null && DraggingItemView.gameObject.activeSelf)
-            {
-                DraggedItemView DraggedItemView = Traverse.Create(DraggingItemView).Property("DraggedItemView").GetValue<DraggedItemView>();
-                if (DraggedItemView != null)
-                {
-                    object ItemContext = Traverse.Create(DraggedItemView).Property("ItemContext").GetValue<object>();
-                    if (ItemContext != null)
-                    {
-                        ItemRotation ItemRotation = Traverse.Create(ItemContext).Field("ItemRotation").GetValue<ItemRotation>();
-                        DraggedItemViewMethod_2.Invoke(DraggedItemView, new object[1] { (ItemRotation == ItemRotation.Horizontal ? ItemRotation.Vertical : ItemRotation.Horizontal) });
-                        AmandsControllerOnDrag();
-                    }
-                }
-            }
-        }
-        public void AmandsControllerSplitDragged()
-        {
-            if (Dragging && pointerEventData != null)
-            {
-                AmandsControllerPlugin.LeftControl.Enable();
-                pointerEventData.position = globalPosition;
-                if (pointerEventData.pointerEnter != null)
-                {
-                    Dragging = false;
-                    pointerEventData.dragging = false;
-                    if (DraggingItemView != null && DraggingItemView.gameObject.activeSelf)
-                    {
-                        DraggingItemView.OnEndDrag(pointerEventData);
-                        DraggingItemView = null;
-                        AmandsControllerOnPointerMove();
-                    }
-                    AmandsControllerDisableSet("OnDrag");
-                }
-                else
-                {
-                    AmandsControllerCancelDrag();
-                }
-                AmandsControllerPlugin.LeftControl.Disable();
-            }
-        }
-        public void AmandsControllerInterfaceBind(EBoundItem bindIndex)
-        {
-            if (onPointerEnterItemView == null || (onPointerEnterItemView != null && !onPointerEnterItemView.gameObject.activeSelf))
-            {
-                AmandsControllerOnPointerMove();
-            }
-            if (pointerEventData != null && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf)
-            {
-                pointerEventData.position = globalPosition;
-                ItemUiContext ItemUiContext = ItemUiContext.Instance;//Traverse.Create(onPointerEnterItemView).Field("ItemUiContext").GetValue<ItemUiContext>();
-                if (ItemUiContext != null && onPointerEnterItemView.Item != null && ItemUIContextMethod_0 != null)
-                {
-                    ItemUIContextMethod_0InvokeParameters[0] = onPointerEnterItemView.Item;
-                    ItemUIContextMethod_0InvokeParameters[1] = bindIndex;
-                    ItemUIContextMethod_0.Invoke(ItemUiContext, ItemUIContextMethod_0InvokeParameters);
-                }
-                /*pointerEventData.position = globalPosition;
-                List<RaycastResult> results = new List<RaycastResult>();
-                eventSystem.RaycastAll(pointerEventData, results);
-                if (results.Count > 0)
-                {
-                    itemView = results[0].gameObject.GetComponentInParent<ItemView>();
-                    if (itemView == null)
-                    {
-                        itemView = results[0].gameObject.GetComponentInParent<GridItemView>();
-                    }
-                    if (itemView == null)
-                    {
-                        itemView = results[0].gameObject.GetComponentInParent<SlotItemView>();
-                    }
-                    if (itemView != null)
-                    {
-                        ItemUiContext ItemUiContext = Traverse.Create(itemView).Field("ItemUiContext").GetValue<ItemUiContext>();
-                        if (ItemUiContext != null && itemView.Item != null && ItemUIContextMethod_0 != null)
-                        {
-                            ItemUIContextMethod_0InvokeParameters[0] = itemView.Item;
-                            ItemUIContextMethod_0InvokeParameters[1] = bindIndex;
-                            ItemUIContextMethod_0.Invoke(ItemUiContext, ItemUIContextMethod_0InvokeParameters);
-                        }
-                    }
-                }*/
-            }
-        }
-        public void AmandsControllerShowContextMenu()
-        {
-            if (!ContextMenu && onPointerEnterItemView != null && onPointerEnterItemView.gameObject.activeSelf)
-            {
-                UpdateGlobalPosition();
-                ShowContextMenuInvokeParameters[0] = globalPosition;
-                ShowContextMenu.Invoke(onPointerEnterItemView, ShowContextMenuInvokeParameters);
-            }
-        }
-        public void AmandsControllerContextMenuUse()
-        {
-            if ((currentSimpleContextMenuButton != null && currentSimpleContextMenuButton.gameObject.activeSelf))
-            {
-                Button _button = Traverse.Create(currentSimpleContextMenuButton).Field("_button").GetValue<Button>();
-                if (_button != null)
-                {
-                    _button.onClick.Invoke();
-                }
-            }
-        }
-        public void AmandsControllerSplitDialogAccept()
-        {
-            if (splitDialog != null)
-            {
-                splitDialog.Accept();
-            }
-        }
-        public void AmandsControllerSplitDialogAdd(int Value)
-        {
-            if (splitDialog != null)
-            {
-                IntSlider _intSlider = Traverse.Create(splitDialog).Field("_intSlider").GetValue<IntSlider>();
-                if (_intSlider != null && _intSlider.gameObject.activeSelf)
-                {
-                    lastIntSliderValue = Value;
-                    SplitDialogAutoMove = true;
-                    int int_1 = Traverse.Create(_intSlider).Field("int_1").GetValue<int>() - 1;
-                    _intSlider.UpdateValue((_intSlider.CurrentValue() + int_1) + ((LB || RB) ? Value * 10 : Value));
-                }
-                StepSlider _stepSlider = Traverse.Create(splitDialog).Field("_stepSlider").GetValue<StepSlider>();
-                if (_stepSlider != null && _stepSlider.gameObject.activeSelf)
-                {
-                    lastIntSliderValue = Value;
-                    SplitDialogAutoMove = true;
-                    //Temp
-                    int int_0 = Traverse.Create(_stepSlider).Field("int_0").GetValue<int>();
-                    int int_1 = Traverse.Create(_stepSlider).Field("int_1").GetValue<int>();
-                    _stepSlider.Show(int_0, int_1, (int)_stepSlider.CurrentValue() + ((LB || RB) ? Value * 10 : Value));
-                }
-            }
-        }
-        public void AmandsControllerScroll(float Value)
-        {
-            float height = currentScrollRectNoDrag.content.rect.height;
-            Vector2 position = new Vector2(currentScrollRectNoDragRectTransform.position.x + currentScrollRectNoDragRectTransform.rect.x, currentScrollRectNoDragRectTransform.position.y - (currentScrollRectNoDragRectTransform.rect.height * (currentScrollRectNoDragRectTransform.pivot.y - 1f)));
-            currentScrollRectNoDrag.verticalNormalizedPosition = currentScrollRectNoDrag.verticalNormalizedPosition + ((((Value * 1000f) / height) / height) * 10000f * Time.deltaTime * AmandsControllerPlugin.ScrollSensitivity.Value);
-            UpdateGlobalPosition();
-            if ((globalPosition.y + (GridSize / 2f)) > position.y)
-            {
-                ControllerUIMove(new Vector2Int(0, -1), false);
-            }
-            else if ((globalPosition.y - (GridSize / 2f)) < (position.y - (currentScrollRectNoDragRectTransform.rect.height * ScreenRatio)))
-            {
-                ControllerUIMove(new Vector2Int(0, 1), false);
-            }
-        }
-        public void AmandsControllerAutoScroll()
-        {
-            float height = currentScrollRectNoDrag.content.rect.height;
-            Vector2 position = new Vector2(currentScrollRectNoDragRectTransform.position.x + currentScrollRectNoDragRectTransform.rect.x, currentScrollRectNoDragRectTransform.position.y - (currentScrollRectNoDragRectTransform.rect.height * (currentScrollRectNoDragRectTransform.pivot.y - 1f)));
-            if (globalPosition.x > position.x && globalPosition.x < (position.x + (currentScrollRectNoDragRectTransform.rect.width * ScreenRatio)))
-            {
-                if ((globalPosition.y + (GridSize / 2f)) > position.y)
-                {
-                    currentScrollRectNoDrag.verticalNormalizedPosition = currentScrollRectNoDrag.verticalNormalizedPosition + (((1000f / height) / height) * 10000f * Time.deltaTime * AmandsControllerPlugin.ScrollSensitivity.Value);
-                    UpdateGlobalPosition();
-                    if (!((globalPosition.y + (GridSize / 2f)) > position.y) && !((globalPosition.y - (GridSize / 2f)) < (position.y - (currentScrollRectNoDragRectTransform.rect.height * ScreenRatio))))
-                    {
-                        ControllerUIOnMove(Vector2Int.zero, globalPosition);
-                    }
-                }
-                else if ((globalPosition.y - (GridSize / 2f)) < (position.y - (currentScrollRectNoDragRectTransform.rect.height * ScreenRatio)))
-                {
-                    currentScrollRectNoDrag.verticalNormalizedPosition = currentScrollRectNoDrag.verticalNormalizedPosition + (((-1000f / height) / height) * 10000f * Time.deltaTime * AmandsControllerPlugin.ScrollSensitivity.Value);
-                    UpdateGlobalPosition();
-                    if (!((globalPosition.y + (GridSize / 2f)) > position.y) && !((globalPosition.y - (GridSize / 2f)) < (position.y - (currentScrollRectNoDragRectTransform.rect.height * ScreenRatio))))
-                    {
-                        ControllerUIOnMove(Vector2Int.zero, globalPosition);
-                    }
-                }
-            }
-        }
-        public void AmandsControllerNextTab()
-        {
-            Tab tab = null;
-            switch (AmandsControllerCurrentTab())
-            {
-                case InventoryScreen.EInventoryTab.Overall:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Gear)) tab = Tabs[InventoryScreen.EInventoryTab.Gear];
-                    break;
-                case InventoryScreen.EInventoryTab.Gear:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Health)) tab = Tabs[InventoryScreen.EInventoryTab.Health];
-                    break;
-                case InventoryScreen.EInventoryTab.Health:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Skills)) tab = Tabs[InventoryScreen.EInventoryTab.Skills];
-                    break;
-                case InventoryScreen.EInventoryTab.Skills:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Map)) tab = Tabs[InventoryScreen.EInventoryTab.Map];
-                    break;
-                case InventoryScreen.EInventoryTab.Map:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Notes)) tab = Tabs[InventoryScreen.EInventoryTab.Notes];
-                    break;
-                case InventoryScreen.EInventoryTab.Notes:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Overall)) tab = Tabs[InventoryScreen.EInventoryTab.Overall];
-                    break;
-            }
-            if (tab != null)
-            {
-                tab.OnPointerClick(null);
-            }
-        }
-        public void AmandsControllerPreviousTab()
-        {
-            Tab tab = null;
-            switch (AmandsControllerCurrentTab())
-            {
-                case InventoryScreen.EInventoryTab.Overall:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Notes)) tab = Tabs[InventoryScreen.EInventoryTab.Notes];
-                    break;
-                case InventoryScreen.EInventoryTab.Gear:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Overall)) tab = Tabs[InventoryScreen.EInventoryTab.Overall];
-                    break;
-                case InventoryScreen.EInventoryTab.Health:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Gear)) tab = Tabs[InventoryScreen.EInventoryTab.Gear];
-                    break;
-                case InventoryScreen.EInventoryTab.Skills:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Health)) tab = Tabs[InventoryScreen.EInventoryTab.Health];
-                    break;
-                case InventoryScreen.EInventoryTab.Map:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Skills)) tab = Tabs[InventoryScreen.EInventoryTab.Skills];
-                    break;
-                case InventoryScreen.EInventoryTab.Notes:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Map)) tab = Tabs[InventoryScreen.EInventoryTab.Map];
-                    break;
-            }
-            if (tab != null)
-            {
-                tab.OnPointerClick(null);
-            }
-        }
-        public InventoryScreen.EInventoryTab AmandsControllerCurrentTab()
-        {
-            if (Tabs != null)
-            {
-                foreach (KeyValuePair<InventoryScreen.EInventoryTab, Tab> Tab in Tabs)
-                {
-                    if (Traverse.Create(Tab.Value).Field("_uiSelected").GetValue<bool>()) return Tab.Key;
-                }
-            }
-            return InventoryScreen.EInventoryTab.Unchanged;
         }
 
-        public void DebugStuff(string stuff)
-        {
-            //ConsoleScreen.Log(stuff);
-        }
+        // Files
         public static void WriteToJsonFile<T>(string filePath, T objectToWrite, bool append = false) where T : new()
         {
             TextWriter writer = null;
@@ -5941,11 +5375,11 @@ namespace AmandsController
                 LoadAudioClip(File);
             }
         }
-        async static void LoadSprite(string path)
+        private async static void LoadSprite(string path)
         {
             LoadedSprites[Path.GetFileName(path)] = await RequestSprite(path);
         }
-        async static Task<Sprite> RequestSprite(string path)
+        private async static Task<Sprite> RequestSprite(string path)
         {
             UnityWebRequest www = UnityWebRequestTexture.GetTexture(path);
             var SendWeb = www.SendWebRequest();
@@ -5965,11 +5399,11 @@ namespace AmandsController
                 return sprite;
             }
         }
-        async static void LoadAudioClip(string path)
+        private async static void LoadAudioClip(string path)
         {
             LoadedAudioClips[Path.GetFileName(path)] = await RequestAudioClip(path);
         }
-        async static Task<AudioClip> RequestAudioClip(string path)
+        private async static Task<AudioClip> RequestAudioClip(string path)
         {
             string extension = Path.GetExtension(path);
             AudioType audioType = AudioType.WAV;
@@ -6085,9 +5519,9 @@ namespace AmandsController
             IconRectTransform.sizeDelta = AmandsControllerPlugin.BlockSize.Value;
             IconImage = IconGameObject.AddComponent<Image>();
             IconImage.raycastTarget = false;
-            if (AmandsControllerClass.LoadedSprites.ContainsKey(Button.ToString() + ".png"))
+            if (AmandsControllerClass.LoadedSprites.ContainsKey((AmandsControllerPlugin.DualsenseIcons.Value ? "Dualsense" : "") + Button.ToString() + ".png"))
             {
-                IconImage.sprite = AmandsControllerClass.LoadedSprites[Button.ToString() + ".png"];
+                IconImage.sprite = AmandsControllerClass.LoadedSprites[(AmandsControllerPlugin.DualsenseIcons.Value ? "Dualsense" : "") + Button.ToString() + ".png"];
             }
             IconLayoutElement = IconGameObject.AddComponent<LayoutElement>();
             IconLayoutElement.preferredWidth = AmandsControllerPlugin.BlockSize.Value.x;
@@ -6106,9 +5540,9 @@ namespace AmandsController
         {
             this.Pressed = Pressed;
 
-            if (IconImage != null && AmandsControllerClass.LoadedSprites.ContainsKey(Pressed ? (Button.ToString() + "_PRESSED.png") : Button.ToString() + ".png"))
+            if (IconImage != null && AmandsControllerClass.LoadedSprites.ContainsKey(Pressed ? (AmandsControllerPlugin.DualsenseIcons.Value ? "Dualsense" : "") + (Button.ToString() + "_PRESSED.png") : (AmandsControllerPlugin.DualsenseIcons.Value ? "Dualsense" : "") + Button.ToString() + ".png"))
             {
-                IconImage.sprite = AmandsControllerClass.LoadedSprites[Pressed ? (Button.ToString() + "_PRESSED.png") : Button.ToString() + ".png"];
+                IconImage.sprite = AmandsControllerClass.LoadedSprites[Pressed ? (AmandsControllerPlugin.DualsenseIcons.Value ? "Dualsense" : "") + (Button.ToString() + "_PRESSED.png") : (AmandsControllerPlugin.DualsenseIcons.Value ? "Dualsense" : "") + Button.ToString() + ".png"];
             }
 
         }
@@ -6290,15 +5724,4 @@ namespace AmandsController
         LS = 1,
         RS = 2
     }
-    /*public enum EAmandsControllerStickMode
-    {
-        None = 0,
-        Movement = 1,
-        Look = 2,
-        Freelook = 3,
-        Interface = 4,
-        InterfaceSkip = 5,
-        Buttons = 6,
-        Scroll = 7
-    }*/
 }
