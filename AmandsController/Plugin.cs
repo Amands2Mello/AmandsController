@@ -18,7 +18,7 @@ using UnityEngine.EventSystems;
 
 namespace AmandsController
 {
-    [BepInPlugin("com.Amanda.Controller", "Controller", "0.3.3")]
+    [BepInPlugin("com.Amanda.Controller", "Controller", "0.3.4")]
     public class AmandsControllerPlugin : BaseUnityPlugin
     {
         public static GameObject Hook;
@@ -37,6 +37,7 @@ namespace AmandsController
         public static ConfigEntry<float> HoldDelay { get; set; }
 
         // Aim
+        public static ConfigEntry<bool> HoldAim { get; set; }
         public static ConfigEntry<Vector2> Sensitivity { get; set; }
         public static ConfigEntry<Vector2> AimingSensitivity { get; set; }
         public static ConfigEntry<bool> InvertY { get; set; }
@@ -77,8 +78,7 @@ namespace AmandsController
         private void Awake()
         {
             Debug.LogError("Controller Awake()");
-            Hook = new GameObject();
-            Hook.name = "AmandsController";
+            Hook = new GameObject("Controller");
             AmandsControllerClassComponent = Hook.AddComponent<AmandsControllerClass>();
             DontDestroyOnLoad(Hook);
         }
@@ -95,6 +95,7 @@ namespace AmandsController
             DoubleClickDelay = Config.Bind("Inputs", "DoubleClickDelay", 0.25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 110, IsAdvanced = true }));
             HoldDelay = Config.Bind("Inputs", "HoldDelay", 0.25f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100, IsAdvanced = true }));
 
+            HoldAim = Config.Bind("Aim", "HoldAim", false, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 150 }));
             Sensitivity = Config.Bind("Aim", "Sensitivity", new Vector2(20f, 12f), new ConfigDescription("EFT Mouse Sensivity affects this value", null, new ConfigurationManagerAttributes { Order = 140 }));
             AimingSensitivity = Config.Bind("Aim", "AimingSensitivity", new Vector2(20f, 12f), new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 130 }));
             InvertY = Config.Bind("Aim", "InvertY", false, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 120 }));
@@ -126,7 +127,7 @@ namespace AmandsController
             PressFontSize = Config.Bind("UI Button Blocks", "PressFontSize", 20, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 110, IsAdvanced = true }));
             HoldDoubleClickFontSize = Config.Bind("UI Button Blocks", "HoldDoubleClickFontSize", 12, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100, IsAdvanced = true }));
 
-            new AmandsLocalPlayerPatch().Enable();
+            new AmandsPlayerPatch().Enable();
             new AmandsTarkovApplicationPatch().Enable();
             new AmandsSSAAPatch().Enable();
             new AmandsInventoryScreenShowPatch().Enable();
@@ -168,19 +169,18 @@ namespace AmandsController
             LeftControl = new InputGetKeyDownLeftControlPatch();
         }
     }
-    public class AmandsLocalPlayerPatch : ModulePatch
+    public class AmandsPlayerPatch : ModulePatch
     {
         protected override MethodBase GetTargetMethod()
         {
-            return typeof(LocalPlayer).GetMethod("Create", BindingFlags.Static | BindingFlags.Public);
+            return typeof(Player).GetMethod("Init", BindingFlags.Instance | BindingFlags.Public);
         }
         [PatchPostfix]
-        private static void PatchPostFix(ref Task<LocalPlayer> __result)
+        private static void PatchPostFix(ref Player __instance)
         {
-            LocalPlayer localPlayer = __result.Result;
-            if (localPlayer != null && localPlayer.IsYourPlayer)
+            if (__instance != null && __instance.IsYourPlayer)
             {
-                AmandsControllerPlugin.AmandsControllerClassComponent.UpdateController(localPlayer);
+                AmandsControllerPlugin.AmandsControllerClassComponent.UpdateController(__instance);
             }
         }
     }
