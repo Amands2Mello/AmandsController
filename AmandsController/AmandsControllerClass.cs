@@ -29,7 +29,7 @@ namespace AmandsController
     public class AmandsControllerClass : MonoBehaviour
     {
         // AmandsController
-        public LocalPlayer localPlayer;
+        public Player Player;
         public InputTree inputTree;
         public Player.FirearmController firearmController;
         public bool InRaid = false;
@@ -120,11 +120,11 @@ namespace AmandsController
         // Aim Assist
         private Collider[] colliders;
         public int colliderCount;
-        public LayerMask AimAssistLayerMask = LayerMask.GetMask("Player");
+        public LayerMask AimAssistLayerMask;
 
         public Dictionary<LocalPlayer, float> AimAssistPlayers = new Dictionary<LocalPlayer, float>();
         private RaycastHit hit;
-        private LayerMask HighLayerMask = LayerMask.GetMask("Terrain", "HighPolyCollider");
+        private LayerMask HighLayerMask;
 
         private Vector2 ScreenSize = new Vector2(Screen.width, Screen.height);
         private Vector2 ScreenSizeRatioMultiplier = new Vector2(1f, Screen.height / Screen.width);
@@ -563,6 +563,12 @@ namespace AmandsController
                 GUI.Box(new Rect(new Vector2(position.x, (Screen.height) - position.y), new Vector2(currentScrollRectNoDragRectTransform.rect.width * ScreenRatio, currentScrollRectNoDragRectTransform.rect.height * ScreenRatio)), gUIContent);
             }
         }
+
+        private void Awake()
+        {
+            AimAssistLayerMask = LayerMask.GetMask("Player");
+            HighLayerMask = LayerMask.GetMask("Terrain", "HighPolyCollider");
+        }
         public void Start()
         {
             ItemUIContextMethod_0 = typeof(ItemUiContext).GetMethod("method_0", BindingFlags.Instance | BindingFlags.Public);
@@ -598,7 +604,7 @@ namespace AmandsController
         {
             if (!connected) return;
 
-            InRaid = localPlayer != null;
+            InRaid = Player != null;
 
             if (!InRaid) return;
 
@@ -618,6 +624,10 @@ namespace AmandsController
                 {
                     LT = false;
                     GeneratePressType(EAmandsControllerButton.LT, false);
+                    if (AmandsControllerPlugin.HoldAim.Value)
+                    {
+                        AmandsControllerButton(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.EndAlternativeShooting), EAmandsControllerPressType.Release, 3));
+                    }
                 }
             }
             if (RightTrigger > AmandsControllerPlugin.RTDeadzone.Value)
@@ -1333,7 +1343,7 @@ namespace AmandsController
             // Movement
             if (!LSButtons && LSXYSqrt > AmandsControllerPlugin.MovementDeadzone.Value)
             {
-                localPlayer.Move(LS.normalized);
+                Player.Move(LS.normalized);
                 CharacterMovementSpeed = 0f;
                 if (MovementContextObject != null)
                 {
@@ -1351,6 +1361,7 @@ namespace AmandsController
             }
             else if (resetCharacterMovementSpeed)
             {
+                resetCharacterMovementSpeed = false;
                 if (MovementContextObject != null)
                 {
                     MovementInvokeParameters[0] = 0f;
@@ -1363,7 +1374,7 @@ namespace AmandsController
             }
 
             // Aiming
-            if (localPlayer != null && Camera.main != null)
+            if (Player != null && Camera.main != null)
             {
                 Magnetism = false;
                 Stickiness = 0;
@@ -1374,7 +1385,7 @@ namespace AmandsController
 
                 if (firearmController == null)
                 {
-                    firearmController = localPlayer.HandsController as Player.FirearmController;
+                    firearmController = Player.HandsController as Player.FirearmController;
                 }
                 if (firearmController != null)
                 {
@@ -1396,7 +1407,7 @@ namespace AmandsController
                     SSAARatio = (float)currentSSAA.GetOutputHeight() / (float)currentSSAA.GetInputHeight();
 
                     HitAimAssistLocalPlayer = colliders[i].transform.gameObject.GetComponent<LocalPlayer>();
-                    if (HitAimAssistLocalPlayer != null && HitAimAssistLocalPlayer != localPlayer)
+                    if (HitAimAssistLocalPlayer != null && HitAimAssistLocalPlayer != Player)
                     {
                         AimAssistScreenLocalPosition = ((((((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Head.position + (HitAimAssistLocalPlayer.Velocity * 0f))  * SSAARatio) - (((((Vector2)Camera.main.WorldToScreenPoint(AimPosition + (AimDirection * Vector3.Distance(AimPosition, HitAimAssistLocalPlayer.PlayerBones.Head.position + (HitAimAssistLocalPlayer.Velocity * 0f))))  * SSAARatio) - (((Vector2)Camera.main.WorldToScreenPoint(HitAimAssistLocalPlayer.PlayerBones.Head.position + (HitAimAssistLocalPlayer.Velocity * 0f))  * SSAARatio) - (ScreenSize / 2f))) - (ScreenSize / 2f)) * 2f)) - (ScreenSize / 2f)) / ScreenSize) * ScreenSizeRatioMultiplier);
                         AimAssistBoneAngle = Mathf.Sqrt(Vector2.SqrMagnitude(AimAssistScreenLocalPosition)) / (ScreenSize.y / ScreenSize.x);
@@ -1446,18 +1457,18 @@ namespace AmandsController
             {
                 Aim.x = RS.x * AimAnimationCurve.Evaluate(RSXYSqrt);
                 Aim.y = RS.y * AimAnimationCurve.Evaluate(RSXYSqrt);
-                localPlayer.Rotate(((Aim * (isAiming ? AmandsControllerPlugin.AimingSensitivity.Value : AmandsControllerPlugin.Sensitivity.Value) * (AmandsControllerPlugin.InvertY.Value ? Vector2.one * 100f : InvertY) * Time.deltaTime) * Mathf.Lerp(1f, AmandsControllerPlugin.Stickiness.Value, StickinessSmooth)) + AutoAimSmooth, false);
+                Player.Rotate(((Aim * (isAiming ? AmandsControllerPlugin.AimingSensitivity.Value : AmandsControllerPlugin.Sensitivity.Value) * (AmandsControllerPlugin.InvertY.Value ? Vector2.one * 100f : InvertY) * Time.deltaTime) * Mathf.Lerp(1f, AmandsControllerPlugin.Stickiness.Value, StickinessSmooth)) + AutoAimSmooth, false);
             }
 
             // Aiming Set
-            if (localPlayer.HandsController != null)
+            if (Player.HandsController != null)
             {
-                if (localPlayer.HandsController.IsAiming && !isAiming)
+                if (Player.HandsController.IsAiming && !isAiming)
                 {
                     isAiming = true;
                     EnableSet("Aiming");
                 }
-                else if (isAiming && !localPlayer.HandsController.IsAiming)
+                else if (isAiming && !Player.HandsController.IsAiming)
                 {
                     isAiming = false;
                     DisableSet("Aiming");
@@ -1467,7 +1478,7 @@ namespace AmandsController
             // Lean
             if (SlowLeanLeft || SlowLeanRight)
             {
-                localPlayer.SlowLean(((SlowLeanLeft ? -AmandsControllerPlugin.LeanSensitivity.Value: 0) + (SlowLeanRight ? AmandsControllerPlugin.LeanSensitivity.Value : 0)) * Time.deltaTime);
+                Player.SlowLean(((SlowLeanLeft ? -AmandsControllerPlugin.LeanSensitivity.Value: 0) + (SlowLeanRight ? AmandsControllerPlugin.LeanSensitivity.Value : 0)) * Time.deltaTime);
             }
         }
         private void BlockPositionUpdated(object sender, EventArgs e)
@@ -1479,7 +1490,7 @@ namespace AmandsController
         }
         private void UserIndexUpdated(object sender, EventArgs e)
         {
-            if (localPlayer != null)
+            if (Player != null)
             {
                 switch (AmandsControllerPlugin.UserIndex.Value)
                 {
@@ -1507,7 +1518,7 @@ namespace AmandsController
             }
         }
 
-        public void UpdateController(LocalPlayer Player)
+        public void UpdateController(Player player)
         {
             ScreenRatio = (Screen.height / 1080f);
 
@@ -1538,11 +1549,11 @@ namespace AmandsController
                     break;
             }
 
-            if (Player != null)
+            if (player != null)
             {
-                localPlayer = Player;
+                Player = player;
                 //movementContext = localPlayer.MovementContext;
-                MovementContextObject = Traverse.Create(localPlayer).Property("MovementContext").GetValue<object>();
+                MovementContextObject = Traverse.Create(Player).Property("MovementContext").GetValue<object>();
                 MovementContextType = MovementContextObject.GetType();
                 SetCharacterMovementSpeed = MovementContextType.GetMethod("SetCharacterMovementSpeed", BindingFlags.Instance | BindingFlags.Public);
             }
@@ -1568,11 +1579,6 @@ namespace AmandsController
             AmandsControllerSets["LB"][EAmandsControllerButton.DOWN].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.SelectSecondaryWeapon), EAmandsControllerPressType.DoubleClick, 2));
             AmandsControllerSets["LB"].Add(EAmandsControllerButton.LEFT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.SelectSecondPrimaryWeapon), EAmandsControllerPressType.Press, 2) });
             AmandsControllerSets["LB"].Add(EAmandsControllerButton.RIGHT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.SelectFirstPrimaryWeapon), EAmandsControllerPressType.Press, 2) });
-
-            /*AmandsControllerSets["LB"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.PressSlot4), EAmandsControllerPressType.Press, 2) });
-            AmandsControllerSets["LB"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.PressSlot5), EAmandsControllerPressType.Press, 2) });
-            AmandsControllerSets["LB"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.PressSlot6), EAmandsControllerPressType.Press, 2) });
-            AmandsControllerSets["LB"].Add(EAmandsControllerButton.Y, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.PressSlot7), EAmandsControllerPressType.Press, 2) });*/
 
             AmandsControllerSets["LB"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.PressSlot4), new AmandsControllerCommand(EAmandsControllerCommand.EnableSet, "HealingLimbSelector") }, EAmandsControllerPressType.Press, 2) });
             AmandsControllerSets["LB"][EAmandsControllerButton.A].Add(new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.SelectFastSlot4), new AmandsControllerCommand(EAmandsControllerCommand.DisableSet, "HealingLimbSelector") }, EAmandsControllerPressType.Release, 2));
@@ -1613,10 +1619,6 @@ namespace AmandsController
             AmandsControllerSets["LB_RB"].Add(EAmandsControllerButton.RIGHT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ToggleStepRight), EAmandsControllerPressType.Press, 3) });
             AmandsControllerSets["LB_RB"][EAmandsControllerButton.RIGHT].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ReturnFromRightStep), EAmandsControllerPressType.Release, 3));
 
-            /*AmandsControllerSets["LB_RB"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.PressSlot8), EAmandsControllerPressType.Press, 2) });
-            AmandsControllerSets["LB_RB"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.PressSlot9), EAmandsControllerPressType.Press, 2) });
-            AmandsControllerSets["LB_RB"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.PressSlot0), EAmandsControllerPressType.Press, 2) });*/
-
             AmandsControllerSets["LB_RB"].Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.PressSlot8), new AmandsControllerCommand(EAmandsControllerCommand.EnableSet, "HealingLimbSelector") }, EAmandsControllerPressType.Press, 3) });
             AmandsControllerSets["LB_RB"][EAmandsControllerButton.A].Add(new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.SelectFastSlot8), new AmandsControllerCommand(EAmandsControllerCommand.DisableSet, "HealingLimbSelector") }, EAmandsControllerPressType.Release, 3));
             AmandsControllerSets["LB_RB"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.PressSlot9), new AmandsControllerCommand(EAmandsControllerCommand.EnableSet, "HealingLimbSelector") }, EAmandsControllerPressType.Press, 3) });
@@ -1637,17 +1639,12 @@ namespace AmandsController
             AmandsControllerSets["HealingLimbSelector"].Add(EAmandsControllerButton.DOWN, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ScrollPrevious), EAmandsControllerPressType.Press, 11) });
 
             AmandsControllerSets.Add("Movement", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
+            AmandsControllerSets["Movement"].Add(EAmandsControllerButton.UP, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.NextWalkPose), EAmandsControllerPressType.Press, 3) });
+            AmandsControllerSets["Movement"].Add(EAmandsControllerButton.DOWN, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.PreviousWalkPose), EAmandsControllerPressType.Press, 3) });
             AmandsControllerSets["Movement"].Add(EAmandsControllerButton.LSLEFT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.SlowLeanLeft), EAmandsControllerPressType.Press, 3) });
             AmandsControllerSets["Movement"][EAmandsControllerButton.LSLEFT].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.EndSlowLean), EAmandsControllerPressType.Release, 3));
             AmandsControllerSets["Movement"].Add(EAmandsControllerButton.LSRIGHT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.SlowLeanRight), EAmandsControllerPressType.Press, 3) });
             AmandsControllerSets["Movement"][EAmandsControllerButton.LSRIGHT].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.EndSlowLean), EAmandsControllerPressType.Release, 3));
-            /*AmandsControllerSets["Movement"].Add(EAmandsControllerButton.UP, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand> { ECommand.NextWalkPose }, EAmandsControllerCommand.InputTree, EAmandsControllerPressType.Press, 3, "") });
-            AmandsControllerSets["Movement"].Add(EAmandsControllerButton.DOWN, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand> { ECommand.PreviousWalkPose }, EAmandsControllerCommand.InputTree, EAmandsControllerPressType.Press, 3, "") });
-            AmandsControllerSets["Movement"].Add(EAmandsControllerButton.LEFT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.SlowLeanLeft, EAmandsControllerPressType.Press, 3, "") });
-            AmandsControllerSets["Movement"][EAmandsControllerButton.LEFT].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.None }, EAmandsControllerCommand.EndSlowLean, EAmandsControllerPressType.Release, 3, ""));
-            AmandsControllerSets["Movement"].Add(EAmandsControllerButton.RIGHT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.SlowLeanRight, EAmandsControllerPressType.Press, 3, "") });
-            AmandsControllerSets["Movement"][EAmandsControllerButton.RIGHT].Add(new AmandsControllerButtonBind(new List<ECommand> { ECommand.None }, EAmandsControllerCommand.EndSlowLean, EAmandsControllerPressType.Release, 3, ""));
-            AmandsControllerSets["Movement"].Add(EAmandsControllerButton.LeftThumb, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<ECommand>(), EAmandsControllerCommand.RestoreLean, EAmandsControllerPressType.Press, 3, "") });*/
 
             AmandsControllerSets.Add("Aiming", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
             AmandsControllerSets["Aiming"].Add(EAmandsControllerButton.RS, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ToggleBreathing), EAmandsControllerPressType.Press, 4) });
