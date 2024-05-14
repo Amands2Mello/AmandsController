@@ -235,11 +235,6 @@ namespace AmandsController
         public bool LSButtons = false;
         public bool RSButtons = false;
 
-        public EAmandsControllerUseStick InterfaceStick = EAmandsControllerUseStick.None;
-        public EAmandsControllerUseStick InterfaceSkipStick = EAmandsControllerUseStick.RS;
-        public EAmandsControllerUseStick ScrollStick = EAmandsControllerUseStick.LS;
-        public EAmandsControllerUseStick WindowStick = EAmandsControllerUseStick.LS;
-
         public Dictionary<InventoryScreen.EInventoryTab, Tab> Tabs = new Dictionary<InventoryScreen.EInventoryTab, Tab>();
 
         // UI AutoMove
@@ -939,13 +934,13 @@ namespace AmandsController
                 {
                     LSUP = true;
                     GeneratePressType(EAmandsControllerButton.LSUP, true);
-                    if (!LSButtons && InterfaceStick == EAmandsControllerUseStick.LS)
+                    if (!LSButtons && AmandsControllerPlugin.InterfaceStick.Value == EAmandsControllerUseStick.LS)
                     {
                         ControllerUIMove(new Vector2Int(0, 1), false);
                         InterfaceStickMoveTime = 0f;
                         InterfaceStickMoveTimeDelay = 0.15f;
                     }
-                    if (QuickSkipStick && !LSButtons && InterfaceSkipStick == EAmandsControllerUseStick.LS)
+                    if (QuickSkipStick && !LSButtons && AmandsControllerPlugin.InterfaceSkipStick.Value == EAmandsControllerUseStick.LS)
                     {
                         ControllerUIMove(new Vector2Int(0, 1), true);
                         InterfaceSkipStickMoveTime = 0f;
@@ -967,13 +962,13 @@ namespace AmandsController
                 {
                     LSDOWN = true;
                     GeneratePressType(EAmandsControllerButton.LSDOWN, true);
-                    if (!LSButtons && InterfaceStick == EAmandsControllerUseStick.LS)
+                    if (!LSButtons && AmandsControllerPlugin.InterfaceStick.Value == EAmandsControllerUseStick.LS)
                     {
                         ControllerUIMove(new Vector2Int(0, -1), false);
                         InterfaceStickMoveTime = 0f;
                         InterfaceStickMoveTimeDelay = 0.15f;
                     }
-                    if (QuickSkipStick && !LSButtons && InterfaceSkipStick == EAmandsControllerUseStick.LS)
+                    if (QuickSkipStick && !LSButtons && AmandsControllerPlugin.InterfaceSkipStick.Value == EAmandsControllerUseStick.LS)
                     {
                         ControllerUIMove(new Vector2Int(0, -1), true);
                         InterfaceSkipStickMoveTime = 0f;
@@ -995,13 +990,13 @@ namespace AmandsController
                 {
                     LSRIGHT = true;
                     GeneratePressType(EAmandsControllerButton.LSRIGHT, true);
-                    if (!LSButtons && InterfaceStick == EAmandsControllerUseStick.LS)
+                    if (!LSButtons && AmandsControllerPlugin.InterfaceStick.Value == EAmandsControllerUseStick.LS)
                     {
                         ControllerUIMove(new Vector2Int(1, 0), false);
                         InterfaceStickMoveTime = 0f;
                         InterfaceStickMoveTimeDelay = 0.15f;
                     }
-                    if (QuickSkipStick && !LSButtons && InterfaceSkipStick == EAmandsControllerUseStick.LS)
+                    if (QuickSkipStick && !LSButtons && AmandsControllerPlugin.InterfaceSkipStick.Value == EAmandsControllerUseStick.LS)
                     {
                         ControllerUIMove(new Vector2Int(1, 0), true);
                         InterfaceSkipStickMoveTime = 0f;
@@ -1023,13 +1018,13 @@ namespace AmandsController
                 {
                     LSLEFT = true;
                     GeneratePressType(EAmandsControllerButton.LSLEFT, true);
-                    if (!LSButtons && InterfaceStick == EAmandsControllerUseStick.LS)
+                    if (!LSButtons && AmandsControllerPlugin.InterfaceStick.Value == EAmandsControllerUseStick.LS)
                     {
                         ControllerUIMove(new Vector2Int(-1, 0), false);
                         InterfaceStickMoveTime = 0f;
                         InterfaceStickMoveTimeDelay = 0.15f;
                     }
-                    if (QuickSkipStick && !LSButtons && InterfaceSkipStick == EAmandsControllerUseStick.LS)
+                    if (QuickSkipStick && !LSButtons && AmandsControllerPlugin.InterfaceSkipStick.Value == EAmandsControllerUseStick.LS)
                     {
                         ControllerUIMove(new Vector2Int(-1, 0), true);
                         InterfaceSkipStickMoveTime = 0f;
@@ -1066,13 +1061,13 @@ namespace AmandsController
                 {
                     RSUP = true;
                     GeneratePressType(EAmandsControllerButton.RSUP, true);
-                    if (!RSButtons && InterfaceStick == EAmandsControllerUseStick.RS)
+                    if (!RSButtons && AmandsControllerPlugin.InterfaceStick.Value == EAmandsControllerUseStick.RS)
                     {
                         ControllerUIMove(new Vector2Int(0, 1), false);
                         InterfaceStickMoveTime = 0f;
                         InterfaceStickMoveTimeDelay = 0.15f;
                     }
-                    if (QuickSkipStick && !RSButtons && InterfaceSkipStick == EAmandsControllerUseStick.RS)
+                    if (QuickSkipStick && !RSButtons && AmandsControllerPlugin.InterfaceSkipStick.Value == EAmandsControllerUseStick.RS)
                     {
                         ControllerUIMove(new Vector2Int(0, 1), true);
                         InterfaceSkipStickMoveTime = 0f;
@@ -1094,13 +1089,13 @@ namespace AmandsController
                 {
                     RSDOWN = true;
                     GeneratePressType(EAmandsControllerButton.RSDOWN, true);
-                    if (!RSButtons && InterfaceStick == EAmandsControllerUseStick.RS)
+                    if (!RSButtons && AmandsControllerPlugin.InterfaceStick.Value == EAmandsControllerUseStick.RS)
                     {
                         ControllerUIMove(new Vector2Int(0, -1), false);
                         InterfaceStickMoveTime = 0f;
                         InterfaceStickMoveTimeDelay = 0.15f;
                     }
-                    if (QuickSkipStick && !RSButtons && InterfaceSkipStick == EAmandsControllerUseStick.RS)
+                    if (QuickSkipStick && !RSButtons && AmandsControllerPlugin.InterfaceSkipStick.Value == EAmandsControllerUseStick.RS)
                     {
                         ControllerUIMove(new Vector2Int(0, -1), true);
                         InterfaceSkipStickMoveTime = 0f;
@@ -1122,13 +1117,13 @@ namespace AmandsController
                 {
                     RSRIGHT = true;
                     GeneratePressType(EAmandsControllerButton.RSRIGHT, true);
-                    if (!RSButtons && InterfaceStick == EAmandsControllerUseStick.RS)
+                    if (!RSButtons && AmandsControllerPlugin.InterfaceStick.Value == EAmandsControllerUseStick.RS)
                     {
                         ControllerUIMove(new Vector2Int(1, 0), false);
                         InterfaceStickMoveTime = 0f;
                         InterfaceStickMoveTimeDelay = 0.15f;
                     }
-                    if (QuickSkipStick && !RSButtons && InterfaceSkipStick == EAmandsControllerUseStick.RS)
+                    if (QuickSkipStick && !RSButtons && AmandsControllerPlugin.InterfaceSkipStick.Value == EAmandsControllerUseStick.RS)
                     {
                         ControllerUIMove(new Vector2Int(1, 0), true);
                         InterfaceSkipStickMoveTime = 0f;
@@ -1150,13 +1145,13 @@ namespace AmandsController
                 {
                     RSLEFT = true;
                     GeneratePressType(EAmandsControllerButton.RSLEFT, true);
-                    if (!RSButtons && InterfaceStick == EAmandsControllerUseStick.RS)
+                    if (!RSButtons && AmandsControllerPlugin.InterfaceStick.Value == EAmandsControllerUseStick.RS)
                     {
                         ControllerUIMove(new Vector2Int(-1, 0), false);
                         InterfaceStickMoveTime = 0f;
                         InterfaceStickMoveTimeDelay = 0.15f;
                     }
-                    if (QuickSkipStick && !RSButtons && InterfaceSkipStick == EAmandsControllerUseStick.RS)
+                    if (QuickSkipStick && !RSButtons && AmandsControllerPlugin.InterfaceSkipStick.Value == EAmandsControllerUseStick.RS)
                     {
                         ControllerUIMove(new Vector2Int(-1, 0), true);
                         InterfaceSkipStickMoveTime = 0f;
@@ -1202,7 +1197,7 @@ namespace AmandsController
                 // Window Move
                 bool WindowLS = false;
                 bool WindowRS = false;
-                switch (WindowStick)
+                switch (AmandsControllerPlugin.WindowStick.Value)
                 {
                     case EAmandsControllerUseStick.LS:
                         if (!LSButtons && LSXYSqrt > AmandsControllerPlugin.LSDeadzone.Value)
@@ -1237,7 +1232,7 @@ namespace AmandsController
                 }
 
                 // Stick Move
-                switch (InterfaceStick)
+                switch (AmandsControllerPlugin.InterfaceStick.Value)
                 {
                     case EAmandsControllerUseStick.LS:
                         if (LSButtons || WindowLS) break;
@@ -1272,7 +1267,7 @@ namespace AmandsController
                 }
 
                 // Stick Skip Move
-                switch (InterfaceSkipStick)
+                switch (AmandsControllerPlugin.InterfaceSkipStick.Value)
                 {
                     case EAmandsControllerUseStick.LS:
                         if (LSButtons || WindowLS) break;
@@ -1309,7 +1304,7 @@ namespace AmandsController
                 // Scroll
                 if (currentScrollRectNoDrag != null && currentScrollRectNoDragRectTransform != null && !ContextMenu)
                 {
-                    switch (ScrollStick)
+                    switch (AmandsControllerPlugin.ScrollStick.Value)
                     {
                         case EAmandsControllerUseStick.None:
                             ControllerAutoScroll();
