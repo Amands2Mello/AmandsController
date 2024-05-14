@@ -18,7 +18,7 @@ using UnityEngine.EventSystems;
 
 namespace AmandsController
 {
-    [BepInPlugin("com.Amanda.Controller", "Controller", "0.3.4")]
+    [BepInPlugin("com.Amanda.Controller", "Controller", "0.3.5")]
     public class AmandsControllerPlugin : BaseUnityPlugin
     {
         public static GameObject Hook;
@@ -63,6 +63,10 @@ namespace AmandsController
         // UI
         public static ConfigEntry<bool> DualsenseIcons { get; set; }
         public static ConfigEntry<float> ScrollSensitivity { get; set; }
+        public static ConfigEntry<EAmandsControllerUseStick> InterfaceStick { get; set; }
+        public static ConfigEntry<EAmandsControllerUseStick> InterfaceSkipStick { get; set; }
+        public static ConfigEntry<EAmandsControllerUseStick> ScrollStick { get; set; }
+        public static ConfigEntry<EAmandsControllerUseStick> WindowStick { get; set; }
 
         // UI Selected Box
         public static ConfigEntry<Color> SelectColor { get; set; }
@@ -115,8 +119,12 @@ namespace AmandsController
             DeadzoneBuffer = Config.Bind("Movement", "DeadzoneBuffer", 0.5f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 120, IsAdvanced = true }));
             LeanSensitivity = Config.Bind("Movement", "LeanSensitivity", 50f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100, IsAdvanced = true }));
 
-            DualsenseIcons = Config.Bind("UI", "DualsenseIcons", false, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 110 }));
-            ScrollSensitivity = Config.Bind("UI", "ScrollSensitivity", 1f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100 }));
+            DualsenseIcons = Config.Bind("UI", "DualsenseIcons", false, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 150 }));
+            ScrollSensitivity = Config.Bind("UI", "ScrollSensitivity", 1f, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 140 }));
+            InterfaceStick = Config.Bind("UI", "InterfaceStick", EAmandsControllerUseStick.None, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 130 }));
+            InterfaceSkipStick = Config.Bind("UI", "InterfaceSkipStick", EAmandsControllerUseStick.RS, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 120 }));
+            ScrollStick = Config.Bind("UI", "ScrollStick", EAmandsControllerUseStick.LS, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 110 }));
+            WindowStick = Config.Bind("UI", "WindowStick", EAmandsControllerUseStick.LS, new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100 }));
 
             SelectColor = Config.Bind("UI Selected Box", "SelectColor", new Color(1f, 0.7659f, 0.3518f, 1), new ConfigDescription("", null, new ConfigurationManagerAttributes { Order = 100 }));
 
