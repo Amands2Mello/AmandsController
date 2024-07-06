@@ -1,4 +1,4 @@
-using Aki.Reflection.Patching;
+using SPT.Reflection.Patching;
 using BepInEx;
 using System.Reflection;
 using UnityEngine;
@@ -18,7 +18,7 @@ using UnityEngine.EventSystems;
 
 namespace AmandsController
 {
-    [BepInPlugin("com.Amanda.Controller", "Controller", "0.3.5")]
+    [BepInPlugin("com.Amanda.Controller", "Controller", "0.3.6")]
     public class AmandsControllerPlugin : BaseUnityPlugin
     {
         public static GameObject Hook;
@@ -225,7 +225,7 @@ namespace AmandsController
         [PatchPostfix]
         private static void PatchPostFix(ref InventoryScreen __instance)
         {
-            AmandsControllerPlugin.AmandsControllerClassComponent.Tabs = Traverse.Create(__instance).Field("dictionary_0").GetValue<Dictionary<InventoryScreen.EInventoryTab, Tab>>();
+            AmandsControllerPlugin.AmandsControllerClassComponent.Tabs = Traverse.Create(__instance).Field("dictionary_0").GetValue<Dictionary<EInventoryTab, Tab>>();
             AmandsControllerPlugin.AmandsControllerClassComponent.UpdateInterfaceBinds(true);
             AmandsControllerPlugin.AmandsControllerClassComponent.UpdateInterface(__instance);
             AsynControllerUIMoveToClosest();
