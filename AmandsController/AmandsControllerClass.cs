@@ -15,7 +15,7 @@ using Comfort.Common;
 using EFT.Communications;
 using EFT.InventoryLogic;
 using Diz.Binding;
-using Aki.Common.Utils;
+using SPT.Common.Utils;
 using System.IO;
 using Newtonsoft.Json;
 using UnityEngine.Networking;
@@ -235,7 +235,7 @@ namespace AmandsController
         public bool LSButtons = false;
         public bool RSButtons = false;
 
-        public Dictionary<InventoryScreen.EInventoryTab, Tab> Tabs = new Dictionary<InventoryScreen.EInventoryTab, Tab>();
+        public Dictionary<EInventoryTab, Tab> Tabs = new Dictionary<EInventoryTab, Tab>();
 
         // UI AutoMove
         private bool AutoMove = false;
@@ -4506,16 +4506,16 @@ namespace AmandsController
                 }
             }
         }
-        public InventoryScreen.EInventoryTab CurrentTab()
+        public EInventoryTab CurrentTab()
         {
             if (Tabs != null)
             {
-                foreach (KeyValuePair<InventoryScreen.EInventoryTab, Tab> Tab in Tabs)
+                foreach (KeyValuePair<EInventoryTab, Tab> Tab in Tabs)
                 {
                     if (Traverse.Create(Tab.Value).Field("_uiSelected").GetValue<bool>()) return Tab.Key;
                 }
             }
-            return InventoryScreen.EInventoryTab.Unchanged;
+            return EInventoryTab.Unchanged;
         }
 
         // UI Pointer
@@ -4977,23 +4977,23 @@ namespace AmandsController
             Tab tab = null;
             switch (CurrentTab())
             {
-                case InventoryScreen.EInventoryTab.Overall:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Gear)) tab = Tabs[InventoryScreen.EInventoryTab.Gear];
+                case EInventoryTab.Overall:
+                    if (Tabs.ContainsKey(EInventoryTab.Gear)) tab = Tabs[EInventoryTab.Gear];
                     break;
-                case InventoryScreen.EInventoryTab.Gear:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Health)) tab = Tabs[InventoryScreen.EInventoryTab.Health];
+                case EInventoryTab.Gear:
+                    if (Tabs.ContainsKey(EInventoryTab.Health)) tab = Tabs[EInventoryTab.Health];
                     break;
-                case InventoryScreen.EInventoryTab.Health:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Skills)) tab = Tabs[InventoryScreen.EInventoryTab.Skills];
+                case EInventoryTab.Health:
+                    if (Tabs.ContainsKey(EInventoryTab.Skills)) tab = Tabs[EInventoryTab.Skills];
                     break;
-                case InventoryScreen.EInventoryTab.Skills:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Map)) tab = Tabs[InventoryScreen.EInventoryTab.Map];
+                case EInventoryTab.Skills:
+                    if (Tabs.ContainsKey(EInventoryTab.Map)) tab = Tabs[EInventoryTab.Map];
                     break;
-                case InventoryScreen.EInventoryTab.Map:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Notes)) tab = Tabs[InventoryScreen.EInventoryTab.Notes];
+                case EInventoryTab.Map:
+                    if (Tabs.ContainsKey(EInventoryTab.Notes)) tab = Tabs[EInventoryTab.Notes];
                     break;
-                case InventoryScreen.EInventoryTab.Notes:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Overall)) tab = Tabs[InventoryScreen.EInventoryTab.Overall];
+                case EInventoryTab.Notes:
+                    if (Tabs.ContainsKey(EInventoryTab.Overall)) tab = Tabs[EInventoryTab.Overall];
                     break;
             }
             if (tab != null)
@@ -5006,23 +5006,23 @@ namespace AmandsController
             Tab tab = null;
             switch (CurrentTab())
             {
-                case InventoryScreen.EInventoryTab.Overall:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Notes)) tab = Tabs[InventoryScreen.EInventoryTab.Notes];
+                case EInventoryTab.Overall:
+                    if (Tabs.ContainsKey(EInventoryTab.Notes)) tab = Tabs[EInventoryTab.Notes];
                     break;
-                case InventoryScreen.EInventoryTab.Gear:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Overall)) tab = Tabs[InventoryScreen.EInventoryTab.Overall];
+                case EInventoryTab.Gear:
+                    if (Tabs.ContainsKey(EInventoryTab.Overall)) tab = Tabs[EInventoryTab.Overall];
                     break;
-                case InventoryScreen.EInventoryTab.Health:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Gear)) tab = Tabs[InventoryScreen.EInventoryTab.Gear];
+                case EInventoryTab.Health:
+                    if (Tabs.ContainsKey(EInventoryTab.Gear)) tab = Tabs[EInventoryTab.Gear];
                     break;
-                case InventoryScreen.EInventoryTab.Skills:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Health)) tab = Tabs[InventoryScreen.EInventoryTab.Health];
+                case EInventoryTab.Skills:
+                    if (Tabs.ContainsKey(EInventoryTab.Health)) tab = Tabs[EInventoryTab.Health];
                     break;
-                case InventoryScreen.EInventoryTab.Map:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Skills)) tab = Tabs[InventoryScreen.EInventoryTab.Skills];
+                case EInventoryTab.Map:
+                    if (Tabs.ContainsKey(EInventoryTab.Skills)) tab = Tabs[EInventoryTab.Skills];
                     break;
-                case InventoryScreen.EInventoryTab.Notes:
-                    if (Tabs.ContainsKey(InventoryScreen.EInventoryTab.Map)) tab = Tabs[InventoryScreen.EInventoryTab.Map];
+                case EInventoryTab.Notes:
+                    if (Tabs.ContainsKey(EInventoryTab.Map)) tab = Tabs[EInventoryTab.Map];
                     break;
             }
             if (tab != null)
