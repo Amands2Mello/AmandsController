@@ -18,7 +18,7 @@ using UnityEngine.EventSystems;
 
 namespace AmandsController
 {
-    [BepInPlugin("com.Amanda.Controller", "Controller", "0.3.6")]
+    [BepInPlugin("com.Amanda.Controller", "Controller", "0.3.7")]
     public class AmandsControllerPlugin : BaseUnityPlugin
     {
         public static GameObject Hook;
@@ -382,7 +382,7 @@ namespace AmandsController
     {
         protected override MethodBase GetTargetMethod()
         {
-            return typeof(GridView).GetMethod("Hide", BindingFlags.Instance | BindingFlags.Public);
+            return typeof(GridView).GetMethod("Close", BindingFlags.Instance | BindingFlags.Public);
         }
         [PatchPostfix]
         private static void PatchPostFix(ref GridView __instance)
@@ -404,7 +404,7 @@ namespace AmandsController
             return typeof(EquipmentTab).GetMethod("Show", BindingFlags.Instance | BindingFlags.Public);
         }
         [PatchPostfix]
-        private static void PatchPostFix(ref EquipmentTab __instance, InventoryControllerClass inventoryController)
+        private static void PatchPostFix(ref EquipmentTab __instance, InventoryController inventoryController)
         {
             if (__instance.gameObject.name == "Gear Panel")
             {
@@ -701,7 +701,7 @@ namespace AmandsController
         [PatchPostfix]
         private static void PatchPostFix(ref SimpleStashPanel __instance)
         {
-            if (!Searching && AmandsControllerPlugin.AmandsControllerClassComponent.InRaid) ShowAsync(__instance);
+            //if (!Searching && AmandsControllerPlugin.AmandsControllerClassComponent.InRaid) ShowAsync(__instance);
         }
         private async static void ShowAsync(SimpleStashPanel instance)
         {
