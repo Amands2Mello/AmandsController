@@ -18,7 +18,7 @@ using UnityEngine.EventSystems;
 
 namespace AmandsController
 {
-    [BepInPlugin("com.Amanda.Controller", "Controller", "0.3.7")]
+    [BepInPlugin("com.Amanda.Controller", "Controller", "0.3.8")]
     public class AmandsControllerPlugin : BaseUnityPlugin
     {
         public static GameObject Hook;
@@ -556,15 +556,21 @@ namespace AmandsController
         [PatchPostfix]
         private static void PatchPostFix(ref SearchButton __instance, bool value)
         {
-            if (__instance.gameObject.activeSelf)
+            AddAsync(__instance);
+        }
+        private async static void AddAsync(SearchButton instance)
+        {
+            await Task.Delay(100);
+            if (instance.gameObject.activeSelf)
             {
-                if (AmandsControllerPlugin.AmandsControllerClassComponent.searchButtons.Contains(__instance)) return;
-                AmandsControllerPlugin.AmandsControllerClassComponent.searchButtons.Add(__instance);
+                if (AmandsControllerPlugin.AmandsControllerClassComponent.searchButtons.Contains(instance)) return;
+                AmandsControllerPlugin.AmandsControllerClassComponent.searchButtons.Add(instance);
+                ConsoleScreen.Log("SearchButton Added");
             }
             else
             {
-                if (!AmandsControllerPlugin.AmandsControllerClassComponent.searchButtons.Contains(__instance)) return;
-                AmandsControllerPlugin.AmandsControllerClassComponent.searchButtons.Remove(__instance);
+                if (!AmandsControllerPlugin.AmandsControllerClassComponent.searchButtons.Contains(instance)) return;
+                AmandsControllerPlugin.AmandsControllerClassComponent.searchButtons.Remove(instance);
             }
         }
     }
