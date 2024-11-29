@@ -565,7 +565,6 @@ namespace AmandsController
             {
                 if (AmandsControllerPlugin.AmandsControllerClassComponent.searchButtons.Contains(instance)) return;
                 AmandsControllerPlugin.AmandsControllerClassComponent.searchButtons.Add(instance);
-                ConsoleScreen.Log("SearchButton Added");
             }
             else
             {
