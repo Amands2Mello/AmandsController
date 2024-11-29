@@ -276,8 +276,8 @@ namespace AmandsController
         private MethodInfo CalculateRotatedSize;
         private MethodInfo DraggedItemViewMethod_2;
 
-        private MethodInfo ItemUIContextMethod_0;
-        private object[] ItemUIContextMethod_0InvokeParameters = new object[2] { typeof(Item), EBoundItem.Item4 };
+        private MethodInfo ItemUIContextMethod_1;
+        private object[] ItemUIContextMethod_1InvokeParameters = new object[2] { typeof(Item), EBoundItem.Item4 };
 
         private MethodInfo ShowContextMenu;
         private object[] ShowContextMenuInvokeParameters = new object[1] { Vector2.zero };
@@ -566,7 +566,7 @@ namespace AmandsController
         }
         public void Start()
         {
-            ItemUIContextMethod_0 = typeof(ItemUiContext).GetMethod("method_0", BindingFlags.Instance | BindingFlags.Public);
+            ItemUIContextMethod_1 = typeof(ItemUiContext).GetMethod("method_1", BindingFlags.Instance | BindingFlags.Public);
             TranslateInput = typeof(InputTree).GetMethod("TranslateInput", BindingFlags.Instance | BindingFlags.Public);
             ButtonPress = typeof(Button).GetMethod("Press", BindingFlags.Instance | BindingFlags.NonPublic);
             ExecuteMiddleClick = typeof(ItemView).GetMethod("ExecuteMiddleClick", BindingFlags.Instance | BindingFlags.Public);
@@ -1604,6 +1604,8 @@ namespace AmandsController
             AmandsControllerSets["RB"].Add(EAmandsControllerButton.BACK, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.SwitchHeadLight), EAmandsControllerPressType.Press, 1) });
             AmandsControllerSets["RB"][EAmandsControllerButton.BACK].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ToggleHeadLight), EAmandsControllerPressType.Hold, 1));
 
+            AmandsControllerSets["RB"].Add(EAmandsControllerButton.LS, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.LeftStanceToggle), EAmandsControllerPressType.Press, 1) });
+
             AmandsControllerSets.Add("LB_RB", new Dictionary<EAmandsControllerButton, List<AmandsControllerButtonBind>>());
             AmandsControllerSets["LB_RB"].Add(EAmandsControllerButton.UP, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ToggleBlindAbove), EAmandsControllerPressType.Press, 3) });
             AmandsControllerSets["LB_RB"][EAmandsControllerButton.UP].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.BlindShootEnd), EAmandsControllerPressType.Release, 3));
@@ -1719,7 +1721,8 @@ namespace AmandsController
             AmandsControllerButtonBinds.Add(EAmandsControllerButton.RT, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.ToggleShooting), new AmandsControllerCommand(ECommand.EndSprinting), new AmandsControllerCommand(ECommand.TryHighThrow) }, EAmandsControllerPressType.Press, -1) });
             AmandsControllerButtonBinds[EAmandsControllerButton.RT].Add(new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.EndShooting), new AmandsControllerCommand(ECommand.FinishHighThrow) }, EAmandsControllerPressType.Release, -1));
 
-            AmandsControllerButtonBinds.Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.Jump), EAmandsControllerPressType.Press, -1) });
+            AmandsControllerButtonBinds.Add(EAmandsControllerButton.A, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new List<AmandsControllerCommand> { new AmandsControllerCommand(ECommand.Jump), new AmandsControllerCommand(ECommand.VaultingEnd) }, EAmandsControllerPressType.Release, -1) });
+            AmandsControllerButtonBinds[EAmandsControllerButton.A].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.Vaulting), EAmandsControllerPressType.Press, -1));
             AmandsControllerButtonBinds.Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ToggleDuck), EAmandsControllerPressType.Press, -1) });
             AmandsControllerButtonBinds[EAmandsControllerButton.B].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ToggleProne), EAmandsControllerPressType.Hold, -1));
             AmandsControllerButtonBinds.Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ReloadWeapon), EAmandsControllerPressType.Press, -1) });
@@ -2295,8 +2298,8 @@ namespace AmandsController
 
                     foreach (GridView gridView in bestContainedGridsView.GridViews)
                     {
-                        GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
-                        GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                        GridWidth = gridView.Grid.GridWidth;
+                        GridHeight = gridView.Grid.GridHeight;
 
                         if (GridWidth == 1 && GridHeight == 1)
                         {
@@ -2408,8 +2411,8 @@ namespace AmandsController
                     if (Position.x > gridView.transform.position.x && Position.x < (gridView.transform.position.x + (rectTransform.sizeDelta.x * ScreenRatio)) && Position.y < gridView.transform.position.y && Position.y > (gridView.transform.position.y - (rectTransform.sizeDelta.y * ScreenRatio)))
                     {
                         Vector2 position;
-                        int GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
-                        int GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                        int GridWidth = gridView.Grid.GridWidth;
+                        int GridHeight = gridView.Grid.GridHeight;
 
                         if (GridWidth == 1 && GridHeight == 1)
                         {
@@ -2448,8 +2451,8 @@ namespace AmandsController
                 Vector2 position = new Vector2(tradingTableGridView.transform.position.x - (size.x / 2f), tradingTableGridView.transform.position.y + (size.y / 2f));
                 if (Position.x > position.x && Position.x < (position.x + size.x) && Position.y < position.y && Position.y > (position.y - size.y))
                 {
-                    int GridWidth = Traverse.Create(Traverse.Create(tradingTableGridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
-                    int GridHeight = Traverse.Create(Traverse.Create(tradingTableGridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                    int GridWidth = tradingTableGridView.Grid.GridWidth;
+                    int GridHeight = tradingTableGridView.Grid.GridHeight;
 
                     if (GridWidth == 1 && GridHeight == 1)
                     {
@@ -2656,8 +2659,8 @@ namespace AmandsController
 
                     foreach (GridView gridView in bestContainedGridsView.GridViews)
                     {
-                        GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
-                        GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                        GridWidth = gridView.Grid.GridWidth;
+                        GridHeight = gridView.Grid.GridHeight;
 
                         if (GridWidth == 1 && GridHeight == 1)
                         {
@@ -2878,8 +2881,8 @@ namespace AmandsController
             // Local GridView Search
             if ((currentGridView != null && currentGridView.gameObject.activeSelf))
             {
-                GridWidth = Traverse.Create(Traverse.Create(currentGridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
-                GridHeight = Traverse.Create(Traverse.Create(currentGridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                GridWidth = currentGridView.Grid.GridWidth;
+                GridHeight = currentGridView.Grid.GridHeight;
             }
             if ((currentGridView != null && currentGridView.gameObject.activeSelf) && gridViewLocation.x + direction.x >= 1 && gridViewLocation.x + direction.x <= GridWidth && gridViewLocation.y - direction.y >= 1 && gridViewLocation.y - direction.y <= GridHeight)
             {
@@ -2896,8 +2899,8 @@ namespace AmandsController
             // Local TradingTableGridView Search
             if ((currentTradingTableGridView != null && currentTradingTableGridView.gameObject.activeSelf))
             {
-                GridWidth = Traverse.Create(Traverse.Create(currentTradingTableGridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
-                GridHeight = Traverse.Create(Traverse.Create(currentTradingTableGridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                GridWidth = currentTradingTableGridView.Grid.GridWidth;
+                GridHeight = currentTradingTableGridView.Grid.GridHeight;
             }
             if ((currentTradingTableGridView != null && currentTradingTableGridView.gameObject.activeSelf) && gridViewLocation.x + direction.x >= 1 && gridViewLocation.x + direction.x <= GridWidth && gridViewLocation.y - direction.y >= 1 && gridViewLocation.y - direction.y <= GridHeight)
             {
@@ -2922,8 +2925,8 @@ namespace AmandsController
                 {
                     if (gridView == null || gridView == currentGridView) continue;
 
-                    GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
-                    GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                    GridWidth = gridView.Grid.GridWidth;
+                    GridHeight = gridView.Grid.GridHeight;
 
                     if (GridWidth == 1 && GridHeight == 1)
                     {
@@ -3044,8 +3047,8 @@ namespace AmandsController
             {
                 if (gridView == null || gridView == currentGridView) continue;
 
-                GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
-                GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                GridWidth = gridView.Grid.GridWidth;
+                GridHeight = gridView.Grid.GridHeight;
 
                 if (GridWidth == 1 && GridHeight == 1)
                 {
@@ -3098,8 +3101,8 @@ namespace AmandsController
                 {
                     if (gridView == null || gridView == currentGridView) continue;
 
-                    GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
-                    GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                    GridWidth = gridView.Grid.GridWidth;
+                    GridHeight = gridView.Grid.GridHeight;
 
                     if (GridWidth == 1 && GridHeight == 1)
                     {
@@ -3152,8 +3155,8 @@ namespace AmandsController
                 Vector2 size = tradingTableGridView.GetComponent<RectTransform>().sizeDelta * ScreenRatio;
                 Vector2 positionTradingTableGridView = new Vector2(tradingTableGridView.transform.position.x - (size.x / 2f), tradingTableGridView.transform.position.y + (size.y / 2f));
 
-                GridWidth = Traverse.Create(Traverse.Create(tradingTableGridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
-                GridHeight = Traverse.Create(Traverse.Create(tradingTableGridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                GridWidth = tradingTableGridView.Grid.GridWidth;
+                GridHeight = tradingTableGridView.Grid.GridHeight;
 
                 position.x = Mathf.Clamp(globalPosition.x - positionTradingTableGridView.x, GridSize / 2f, (GridSize * GridWidth) - (GridSize / 2f));
                 position.y = -Mathf.Clamp(positionTradingTableGridView.y - globalPosition.y, GridSize / 2f, (GridSize * GridHeight) - (GridSize / 2f));
@@ -3517,8 +3520,8 @@ namespace AmandsController
             // Skip Include SimpleStash
             if (Skip && SimpleStashGridView != null && SimpleStashGridView != currentGridView)
             {
-                GridWidth = Traverse.Create(Traverse.Create(SimpleStashGridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
-                GridHeight = Traverse.Create(Traverse.Create(SimpleStashGridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                GridWidth = SimpleStashGridView.Grid.GridWidth;
+                GridHeight = SimpleStashGridView.Grid.GridHeight;
 
                 if (GridWidth == 1 && GridHeight == 1)
                 {
@@ -3650,8 +3653,8 @@ namespace AmandsController
             {
                 if (gridView == null) continue;
 
-                GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
-                GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                GridWidth = gridView.Grid.GridWidth;
+                GridHeight = gridView.Grid.GridHeight;
 
                 if (GridWidth == 1 && GridHeight == 1)
                 {
@@ -3702,8 +3705,8 @@ namespace AmandsController
                 {
                     if (gridView == null) continue;
 
-                    GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
-                    GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                    GridWidth = gridView.Grid.GridWidth;
+                    GridHeight = gridView.Grid.GridHeight;
 
                     if (GridWidth == 1 && GridHeight == 1)
                     {
@@ -3753,8 +3756,8 @@ namespace AmandsController
                 Vector2 size = tradingTableGridView.GetComponent<RectTransform>().sizeDelta * ScreenRatio;
                 Vector2 positionTradingTableGridView = new Vector2(tradingTableGridView.transform.position.x - (size.x / 2f), tradingTableGridView.transform.position.y + (size.y / 2f));
 
-                GridWidth = Traverse.Create(Traverse.Create(tradingTableGridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
-                GridHeight = Traverse.Create(Traverse.Create(tradingTableGridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                GridWidth = tradingTableGridView.Grid.GridWidth;
+                GridHeight = tradingTableGridView.Grid.GridHeight;
 
                 position.x = Mathf.Clamp(globalPosition.x - positionTradingTableGridView.x, GridSize / 2f, (GridSize * GridWidth) - (GridSize / 2f));
                 position.y = -Mathf.Clamp(positionTradingTableGridView.y - globalPosition.y, GridSize / 2f, (GridSize * GridHeight) - (GridSize / 2f));
@@ -4091,8 +4094,8 @@ namespace AmandsController
             // Skip Include SimpleStash
             if (Skip && SimpleStashGridView != null)
             {
-                GridWidth = Traverse.Create(Traverse.Create(SimpleStashGridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
-                GridHeight = Traverse.Create(Traverse.Create(SimpleStashGridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+                GridWidth = SimpleStashGridView.Grid.GridWidth;
+                GridHeight = SimpleStashGridView.Grid.GridHeight;
 
                 if (GridWidth == 1 && GridHeight == 1)
                 {
@@ -4358,8 +4361,8 @@ namespace AmandsController
         }
         public Vector2Int CalculateItemLocation(GridView gridView, ItemView itemView)
         {
-            int GridWidth = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridWidth").GetValue<IBindable<int>>().Value;
-            int GridHeight = Traverse.Create(Traverse.Create(gridView).Field("Grid").GetValue<object>()).Property("GridHeight").GetValue<IBindable<int>>().Value;
+            int GridWidth = gridView.Grid.GridWidth;
+            int GridHeight = gridView.Grid.GridHeight;
 
             RectTransform rectTransform = gridView.transform.GetComponent<RectTransform>();
             Vector2 size = rectTransform.rect.size;
@@ -4587,7 +4590,7 @@ namespace AmandsController
                 TraderControllerClass ItemController = Traverse.Create(onPointerEnterItemView).Field("ItemController").GetValue<TraderControllerClass>();
                 if (ExecuteInteraction != null && IsInteractionAvailable != null)
                 {
-                    if (onPointerEnterItemView.Item is FoodClass || onPointerEnterItemView.Item is MedsClass)
+                    if (onPointerEnterItemView.Item is FoodDrinkItemClass || onPointerEnterItemView.Item is MedsItemClass)
                     {
                         ExecuteInteractionInvokeParameters[0] = EItemInfoButton.Use;
                         if (!(bool)ExecuteInteraction.Invoke(NewContextInteractionsObject, ExecuteInteractionInvokeParameters))
@@ -4605,9 +4608,9 @@ namespace AmandsController
                     if (Hold && ExecuteMiddleClick != null && (bool)ExecuteMiddleClick.Invoke(onPointerEnterItemView, null)) return;
                     SimpleTooltip tooltip = ItemUiContext.Tooltip;
                     IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Equip;
-                    if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters))
+                    if (((IResult)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)).Succeed)
                     {
-                        ItemUiContext.QuickEquip(onPointerEnterItemView.Item).HandleExceptions();
+                        ItemUiContext.EquipItem(onPointerEnterItemView.Item).HandleExceptions();
                         if (tooltip != null)
                         {
                             tooltip.Close();
@@ -4701,7 +4704,7 @@ namespace AmandsController
                 {
                     SimpleTooltip tooltip = ItemUiContext.Tooltip;
                     IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Discard;
-                    if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters))
+                    if (((IResult)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)).Succeed)
                     {
                         ItemUiContext.ThrowItem(onPointerEnterItemView.Item).HandleExceptions();
                         if (tooltip != null)
@@ -4892,11 +4895,11 @@ namespace AmandsController
             {
                 pointerEventData.position = globalPosition;
                 ItemUiContext ItemUiContext = ItemUiContext.Instance;
-                if (ItemUiContext != null && onPointerEnterItemView.Item != null && ItemUIContextMethod_0 != null)
+                if (ItemUiContext != null && onPointerEnterItemView.Item != null && ItemUIContextMethod_1 != null)
                 {
-                    ItemUIContextMethod_0InvokeParameters[0] = onPointerEnterItemView.Item;
-                    ItemUIContextMethod_0InvokeParameters[1] = bindIndex;
-                    ItemUIContextMethod_0.Invoke(ItemUiContext, ItemUIContextMethod_0InvokeParameters);
+                    ItemUIContextMethod_1InvokeParameters[0] = onPointerEnterItemView.Item;
+                    ItemUIContextMethod_1InvokeParameters[1] = bindIndex;
+                    ItemUIContextMethod_1.Invoke(ItemUiContext, ItemUIContextMethod_1InvokeParameters);
                 }
             }
         }
@@ -5194,33 +5197,33 @@ namespace AmandsController
                 if (!onPointerEnterItemView.IsSearched && IsInteractionAvailable != null)
                 {
                     IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Examine;
-                    if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "Examine";
+                    if (((IResult)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)).Succeed) return "Examine";
                 }
                 if (ItemUiContext == null || !onPointerEnterItemView.IsSearched) return "";
                 TraderControllerClass ItemController = Traverse.Create(onPointerEnterItemView).Field("ItemController").GetValue<TraderControllerClass>();
                 if (onPointerEnterItemView.Item != null && ExecuteInteraction != null && IsInteractionAvailable != null && !Hold)
                 {
-                    if (onPointerEnterItemView.Item is FoodClass)
+                    if (onPointerEnterItemView.Item is FoodDrinkItemClass)
                     {
                         IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Use;
-                        if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "Consume";
+                        if (((IResult)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)).Succeed) return "Consume";
                         IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.UseAll;
-                        if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "Consume";
+                        if (((IResult)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)).Succeed) return "Consume";
                     }
-                    if (onPointerEnterItemView.Item is MedsClass)
+                    if (onPointerEnterItemView.Item is MedsItemClass)
                     {
                         IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Use;
-                        if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "Use";
+                        if (((IResult)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)).Succeed) return "Use";
                         IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.UseAll;
-                        if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "Use";
+                        if (((IResult)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)).Succeed) return "Use";
                     }
                     if (onPointerEnterItemView.Item.IsContainer)
                     {
                         IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Open;
-                        if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "Open";
+                        if (((IResult)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)).Succeed) return "Open";
                     }
                     IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Equip;
-                    if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters))
+                    if (((IResult)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)).Succeed)
                     {
                         return "Equip";
                     }
@@ -5238,33 +5241,33 @@ namespace AmandsController
                         }
                     }
                     IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.CheckMagazine;
-                    if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "CheckMagazine";
+                    if (((IResult)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)).Succeed) return "CheckMagazine";
                     if (IsInteractionAvailable != null)
                     {
                         IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Examine;
-                        if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "Examine";
+                        if (((IResult)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)).Succeed) return "Examine";
                         IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Fold;
-                        if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "Fold";
+                        if (((IResult)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)).Succeed) return "Fold";
                         IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Unfold;
-                        if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "Unfold";
+                        if (((IResult)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)).Succeed) return "Unfold";
                         IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.TurnOn;
-                        if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "TurnOn";
+                        if (((IResult)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)).Succeed) return "TurnOn";
                         IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.TurnOff;
-                        if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "TurnOff";
+                        if (((IResult)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)).Succeed) return "TurnOff";
                     }
                 }
                 if (onPointerEnterItemView.Item != null && ExecuteInteraction != null && IsInteractionAvailable != null && Hold)
                 {
                     IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Fold;
-                    if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "Fold";
+                    if (((IResult)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)).Succeed) return "Fold";
                     IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Unfold;
-                    if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "Unfold";
+                    if (((IResult)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)).Succeed) return "Unfold";
                     IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.TurnOn;
-                    if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "TurnOn";
+                    if (((IResult)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)).Succeed) return "TurnOn";
                     IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.TurnOff;
-                    if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "TurnOff";
+                    if (((IResult)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)).Succeed) return "TurnOff";
                     IsInteractionAvailableInvokeParameters[0] = EItemInfoButton.Equip;
-                    if ((bool)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)) return "Equip";
+                    if (((IResult)IsInteractionAvailable.Invoke(NewContextInteractionsObject, IsInteractionAvailableInvokeParameters)).Succeed) return "Equip";
                 }
             }
             return "";
