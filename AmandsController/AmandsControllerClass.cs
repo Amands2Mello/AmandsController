@@ -1591,6 +1591,7 @@ namespace AmandsController
             AmandsControllerSets["RB"].Add(EAmandsControllerButton.X, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.ChamberUnload), EAmandsControllerPressType.Press, 1) });
             AmandsControllerSets["RB"][EAmandsControllerButton.X].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.CheckChamber), EAmandsControllerPressType.Hold, 1));
             AmandsControllerSets["RB"][EAmandsControllerButton.X].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.UnloadMagazine), EAmandsControllerPressType.DoubleClick, 1));
+            AmandsControllerSets["RB"].Add(EAmandsControllerButton.LS, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(ECommand.LeftStanceToggle), EAmandsControllerPressType.Press, 1) });
 
             AmandsControllerSets["RB"].Add(EAmandsControllerButton.B, new List<AmandsControllerButtonBind> { new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.EnableSet, "Movement"), EAmandsControllerPressType.Press, 1) });
             AmandsControllerSets["RB"][EAmandsControllerButton.B].Add(new AmandsControllerButtonBind(new AmandsControllerCommand(EAmandsControllerCommand.DisableSet, "Movement"), EAmandsControllerPressType.Release, 1));
